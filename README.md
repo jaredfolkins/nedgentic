@@ -186,10 +186,10 @@ make -C containers/arm64/minimal    # build the minimal image (ned-minimal:dev)
 ## Release
 
 ```bash
-make release VERSION=v0.1.0
+make release VERSION=20261118v1   # YYYYMMDDvN: date, then the day's release number
 ```
 
-Builds `ned-minimal:v0.1.0`, saves it to `dist/ned-minimal-arm64.oci.tar.gz`,
+Builds `ned-minimal:20261118v1`, saves it to `dist/ned-minimal-arm64.oci.tar.gz`,
 and builds `dist/ned-darwin-arm64` with the version, asset URL, image name,
 and archive sha256 embedded, plus `dist/SHA256SUMS`. It publishes nothing; it
 prints the `gh release create` command to run. The image holds only Debian

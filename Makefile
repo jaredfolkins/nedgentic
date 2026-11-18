@@ -17,7 +17,7 @@ build-ned:
 	rm -f $(HOME)/go/bin/ned
 	cp $(BIN_DIR)/ned $(HOME)/go/bin/ned
 
-# make release VERSION=vX.Y.Z: build the minimal image, export it as the
+# make release VERSION=YYYYMMDDvN (e.g. 20261118v1): build the minimal image, export it as the
 # GitHub release asset, and build a ned that downloads and verifies that asset
 # as its default image. Writes dist/ only; publishing is a separate step.
 VERSION ?=
@@ -30,7 +30,7 @@ RELEASE_URL := https://github.com/$(RELEASE_REPO)/releases/download/$(VERSION)/$
 RELEASE_PKG := nedgentic/internal/release
 
 release:
-	@case "$(VERSION)" in v[0-9]*) ;; *) echo "usage: make release VERSION=vX.Y.Z" >&2; exit 1 ;; esac
+	@echo "$(VERSION)" | grep -Eq '^[0-9]{8}v[1-9][0-9]*$$' || { echo "usage: make release VERSION=YYYYMMDDvN (e.g. 20261118v1)" >&2; exit 1; }
 	rm -rf $(DIST_DIR)
 	mkdir -p $(DIST_DIR) $(BIN_DIR)
 	$(MAKE) -C containers/arm64/minimal TAG=$(VERSION)

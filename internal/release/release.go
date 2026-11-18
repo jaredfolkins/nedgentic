@@ -14,9 +14,9 @@ const DevImageRef = "ned-minimal:dev"
 
 // Set by make release (see the top-level Makefile).
 var (
-	// Version is the release tag, e.g. v0.1.0.
+	// Version is the release tag, e.g. 20261118v1 (YYYYMMDDvN).
 	Version = ""
-	// ImageRef is the local name of the default image, e.g. ned-minimal:v0.1.0.
+	// ImageRef is the local name of the default image, e.g. ned-minimal:20261118v1.
 	ImageRef = ""
 	// ImageURL is the GitHub release asset holding the image archive.
 	ImageURL = ""
