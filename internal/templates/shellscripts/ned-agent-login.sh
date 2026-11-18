@@ -24,6 +24,10 @@ esac
 
 [ -t 0 ] && [ -t 1 ] || exit 0
 
+# Ned's glasses, as on the host.
+NED_TAG=$'\e[38;5;180m[\e[38;5;15m\xe2\x8c\x90\e[38;5;251m\xe2\x97\xaf\e[38;5;15m-\e[38;5;251m\xe2\x97\xaf\e[38;5;180m]\e[0m'
+say() { printf '%s %s\n' "$NED_TAG" "$*"; }
+
 # id|label|credential file|sign-in command|hint
 # Credential files match ned-agent-install --signed-in.
 PROVIDERS=(
@@ -87,7 +91,7 @@ done
 [ "${#pending[@]}" -gt 0 ] || exit 0
 
 echo
-echo "Sign in to agent CLIs for this VM. Enter installs the CLI if needed and signs in, Down skips, q quits."
+say "Sign in to agent CLIs for this VM. Enter installs the CLI if needed and signs in, Down skips, q quits."
 for entry in "${pending[@]}"; do
   IFS='|' read -r id label cred cmd hint <<<"$entry"
   status="signed out"
@@ -97,33 +101,32 @@ for entry in "${pending[@]}"; do
     status="$status, not installed"
     action="install + sign in"
   fi
-  printf '\n> %-9s (%s)  Enter %s · Down skip · q quit ' "$label" "$status" "$action"
+  printf '\n%s %-9s (%s)  Enter %s · Down skip · q quit ' "$NED_TAG" "$label" "$status" "$action"
   choice=$(read_key)
   echo
   case "$choice" in
-    quit) echo "Stopped. Run ned-agent-login any time to continue."; break ;;
+    quit) say "Stopped. Run ned-agent-login any time to continue."; break ;;
     skip)
-      echo "  Skipped $label."
+      say "Skipped $label."
       [ "$MODE" = attach ] && remember_skip "$id"
       continue
       ;;
   esac
   if ! command -v "$id" >/dev/null 2>&1; then
-    echo "  Installing $label (latest)..."
     if ! "$INSTALLER" "$id" || ! command -v "$id" >/dev/null 2>&1; then
-      echo "  $label did not install. Run ned-agent-login to try again."
+      say "$label did not install. Run ned-agent-login to try again."
       continue
     fi
   fi
-  echo "  $hint"
+  say "$hint"
   if $cmd && [ -s "$cred" ]; then
-    echo "  Signed in: $label"
+    say "Signed in: $label"
     forget_skip "$id"
   else
-    echo "  $label sign-in did not finish. Run ned-agent-login to try again."
+    say "$label sign-in did not finish. Run ned-agent-login to try again."
   fi
 done
 
 echo
-echo "Logins are stored on this VM's disk and kept until ned remove. Run ned-agent-login to change them."
+say "Logins are stored on this VM's disk and kept until ned remove. Run ned-agent-login to change them."
 exit 0

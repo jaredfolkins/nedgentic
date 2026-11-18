@@ -24,6 +24,15 @@ usage() {
   sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
 }
 
+# Ned's glasses on a terminal, as on the host; plain in logs.
+say() {
+  if [ -t 1 ]; then
+    printf '\033[38;5;180m[\033[38;5;15m\342\214\220\033[38;5;251m\342\227\257\033[38;5;15m-\033[38;5;251m\342\227\257\033[38;5;180m]\033[0m %s\n' "$*"
+  else
+    printf '%s\n' "$*"
+  fi
+}
+
 die() {
   echo "ned-agent-install: $*" >&2
   exit 1
@@ -182,7 +191,7 @@ ensure() {
   if installed "$1"; then
     return 0
   fi
-  echo "Installing $1 (latest)..."
+  say "Installing $1 (latest)..."
   "install_$1"
 }
 
