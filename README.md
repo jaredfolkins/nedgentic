@@ -8,6 +8,16 @@
 Gemini, Grok, and opencode one keypress away. The folder you start it from is
 mounted read-write; nothing else on your Mac is touched.
 
+## Why
+
+Everyone is moving their agent sandboxes to the cloud, except when they
+don't. I found that there were edge cases where I had to work with an agent
+locally and I wanted a secure place to operate from my laptop.
+
+That is why Ned is small on purpose: one Mac, Apple's own `container`
+runtime, one image, and one command. No cloud account, no cluster, no
+daemon of its own.
+
 ## Requirements
 
 - A Mac with Apple silicon running macOS 26 or later.
