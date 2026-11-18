@@ -4,19 +4,13 @@
   <img src="assets/nedgentic.png" alt="Nedgentic logo: round glasses and a mustache" width="640">
 </p>
 
+Everyone is moving their agent sandboxes to the cloud, except when they
+don't. I found that there were edge cases where I had to work with an agent
+locally and wanted a secure place to operate from my laptop.
+
 `ned` drops you into a sandboxed Linux VM on your Mac with Claude, Codex,
 Gemini, Grok, and opencode one keypress away. The folder you start it from is
 mounted read-write; nothing else on your Mac is touched.
-
-## Why
-
-Everyone is moving their agent sandboxes to the cloud, except when they
-don't. I found that there were edge cases where I had to work with an agent
-locally and I wanted a secure place to operate from my laptop.
-
-That is why Ned is small on purpose: one Mac, Apple's own `container`
-runtime, one image, and one command. No cloud account, no cluster, no
-daemon of its own.
 
 ## Requirements
 
