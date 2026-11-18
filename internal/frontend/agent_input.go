@@ -22,23 +22,6 @@ func sanitizeCommandOutputLines(out []byte) []string {
 	return sharedruntime.SanitizeStructuredCommandLines(out)
 }
 
-func formatCommandOutputError(err error, out []byte) error {
-	return sharedruntime.FormatCommandOutputError(err, out)
-}
-
-func normalizeRuntimeLineItems(kind string, out []byte) ([]string, error) {
-	lines := sanitizeCommandOutputLines(out)
-	items := make([]string, 0, len(lines))
-	for _, line := range lines {
-		value, err := normalizeAgentName(kind, line)
-		if err != nil {
-			return nil, err
-		}
-		items = append(items, value)
-	}
-	return items, nil
-}
-
 func fieldOrDashText(value string) string {
 	lines := sanitizeCommandOutputLines([]byte(value))
 	if len(lines) == 0 {

@@ -24,7 +24,7 @@ mounted read-write; nothing else on your Mac is touched.
 ```bash
 make build-ned                 # builds bin/ned and copies it to ~/go/bin/ned
 cd ~/src/my-project
-ned gentic personal default
+ned gentic default
 ```
 
 On first run Ned checks your Mac, installs the `container` runtime, writes the
@@ -77,8 +77,8 @@ Every VM has its own logins, so each can use a different provider account.
 When one hits a rate limit, switch to another VM on the same folder:
 
 ```bash
-ned gentic personal default work-a   # terminal 1: account A
-ned gentic personal default work-b   # terminal 2: account B
+ned gentic default work-a   # terminal 1: account A
+ned gentic default work-b   # terminal 2: account B
 ```
 
 Both VMs see the same project files. If your browser is signed in to account A,
@@ -116,19 +116,21 @@ port 6080 but need that password.
 ## Commands
 
 ```bash
+ned gentic <profile> [vm] # start (or reattach to) a VM; --herdr runs it in HerdR
 ned list                  # VMs and their status
-ned exec <vm> -- <cmd>    # run a command in a VM
+ned exec <vm> -- <cmd>    # run a command in a running VM
 ned desktop [vm]          # open the VM's desktop in your browser
+ned desktop stop [vm]     # stop the desktop
+ned start <vm>...         # start stopped VMs without attaching
 ned stop <vm>             # stop a VM (logins kept)
-ned remove <vm>           # delete a VM and its logins
-ned image pull <ref>      # pull an image
-ned --help                # everything else
+ned remove <vm>...        # delete VMs and their logins
+ned help [command]        # usage for a command
 ```
 
 ## Profiles
 
 A profile is a HuJSON file (JSON with comments) at
-`~/.ned/profiles/personal/<name>/config.hujson`. `ned gentic personal <name>`
+`~/.ned/profiles/personal/<name>/config.hujson`. `ned gentic <name>`
 creates it on first use. Example:
 
 ```json
@@ -155,13 +157,15 @@ creates it on first use. Example:
   `"mode": "copy"`) and must be under your home directory.
 - Host agent login paths (`~/.claude`, `~/.codex`, `~/.gemini`, `~/.grok`,
   `~/.local/share/opencode`) are rejected.
-- `flags` holds advanced runtime overrides (network, DNS, proxies, Linux
-  capabilities). Unknown keys fail the load.
+- `resources` sets `cpus`, `memory`, and `disk`; `flags` holds advanced
+  runtime settings (network, DNS, proxies, Linux capabilities, ulimits,
+  `rm-container-on-exit`). Ned has no global command-line flags. Unknown keys
+  fail the load.
 
 `ned-minimal:<tag>` images are local only: Ned downloads its own release's tag
 and never pulls other tags from a registry. Other images are pulled normally.
-Private images: run `container registry login` and `container image pull`
-first; Ned uses the local image.
+Private images must be pulled with `container image pull` first; Ned uses the
+local image.
 
 ## Security
 

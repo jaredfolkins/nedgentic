@@ -12,7 +12,6 @@ func TestRunnerTemplatesDoNotRecursivelyChownWorkspaceParent(t *testing.T) {
 		UserGID:        20,
 		HomeDir:        "'/home/alice'",
 		ShellPath:      "'/bin/sh'",
-		GenticDir:      "'/ned/hooks'",
 		ShellCommand:   "'/bin/sh'",
 		WorkspacePath:  "'/home/alice/tmp'",
 		WorkspaceMount: "'/mnt/ned-workspaces/Users/alice/tmp'",

@@ -24,7 +24,6 @@ const (
 	DependenciesName   = "dependencies.json"
 	DefaultProfileName = "default"
 	ProfileConfigName  = "config.hujson"
-	GenticDirName      = "gentic"
 	DefaultShellPath   = "/bin/bash"
 )
 
@@ -87,10 +86,6 @@ func ProfileConfigPath(home, name string) string {
 	return filepath.Join(ProfileDir(home, name), ProfileConfigName)
 }
 
-func ProfileGenticDir(home, name string) string {
-	return filepath.Join(ProfileDir(home, name), GenticDirName)
-}
-
 func DefaultProfilePath(home string) string {
 	return ProfileConfigPath(home, DefaultProfileName)
 }
@@ -146,8 +141,6 @@ func formatFlagsBlock(flags Flags) string {
 	addStringSlice("dns-search", flags.DNSSearch)
 	addStringSlice("dns-option", flags.DNSOptions)
 	addBool("rm-container-on-exit", flags.RemoveContainerOnExit, defaults.RemoveContainerOnExit)
-	addString("gentic-dir", flags.GenticDir, defaults.GenticDir)
-	addBool("gentic-debug", flags.GenticDebug, defaults.GenticDebug)
 	addString("platform", flags.Platform, defaults.Platform)
 	addStringSlice("ulimits", flags.Ulimits)
 	addStringSlice("cap-add", flags.CapAdd)
@@ -476,30 +469,7 @@ func EnsureProfileLayout(home string) error {
 	if err := os.MkdirAll(baseDir, 0700); err != nil {
 		return err
 	}
-	if err := migrateProfileDir(baseDir, "users", PersonalDirName); err != nil {
-		return err
-	}
 	return os.MkdirAll(PersonalProfilesDir(home), 0700)
-}
-
-func migrateProfileDir(baseDir, legacyName, newName string) error {
-	legacyPath := filepath.Join(baseDir, legacyName)
-	newPath := filepath.Join(baseDir, newName)
-	if _, err := os.Stat(newPath); err == nil {
-		return nil
-	} else if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	if _, err := os.Stat(legacyPath); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	if err := os.Rename(legacyPath, newPath); err != nil {
-		return err
-	}
-	return nil
 }
 
 func EnsureDefaultProfile(home string) (string, error) {

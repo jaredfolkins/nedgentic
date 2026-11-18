@@ -15,7 +15,7 @@ var startCmd = &cobra.Command{
 	Short: "Start stopped VMs without attaching",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		flags := applyFlagOverrides(profile.DefaultFlags(), cmd)
+		flags := profile.DefaultFlags()
 		logging.SetLevel(logging.ParseLevel(flags.LogLevel))
 		bin, err := runtime.ResolveContainerBin(flags)
 		if err != nil {

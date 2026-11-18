@@ -81,7 +81,7 @@ func TestRequireContainerRuntimeVersion(t *testing.T) {
 		if !strings.Contains(err.Error(), "requires container 1.6.0 or newer") {
 			t.Fatalf("expected minimum version message, got: %v", err)
 		}
-		if !strings.Contains(err.Error(), "Upgrade with `ned runtime install`") {
+		if !strings.Contains(err.Error(), "Rerun ned to upgrade it") {
 			t.Fatalf("expected upgrade guidance, got: %v", err)
 		}
 	})

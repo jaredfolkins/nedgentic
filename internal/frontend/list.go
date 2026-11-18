@@ -1,7 +1,6 @@
 package frontend
 
 import (
-	"io"
 	"os"
 	"sort"
 	"strings"
@@ -30,7 +29,7 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List Nedgentic VMs",
 	Run: func(cmd *cobra.Command, args []string) {
-		flags := applyFlagOverrides(profile.DefaultFlags(), cmd)
+		flags := profile.DefaultFlags()
 		logging.SetLevel(logging.ParseLevel(flags.LogLevel))
 		bin, err := runtime.ResolveContainerBin(flags)
 		if err != nil {
@@ -44,13 +43,12 @@ var listCmd = &cobra.Command{
 		}
 		rows := buildListRows(entries, listAll)
 		summary := collectStorageSummary(bin)
-		response := listResponse[listRow]{Kind: "vm_list", Items: rows, Summary: summary}
-		if err := renderOutput(cmd, response, func(writer io.Writer) error {
-			if err := writeItemTable(writer, rows, listTableFields, "No Nedgentic VMs found."); err != nil {
-				return err
-			}
-			return writeStorageSummaryText(writer, summary)
-		}); err != nil {
+		writer := cmd.OutOrStdout()
+		err = writeItemTable(writer, rows, listTableFields, "No Nedgentic VMs found.")
+		if err == nil {
+			err = writeStorageSummaryText(writer, summary)
+		}
+		if err != nil {
 			output.Printf("Error rendering VM list: %v", err)
 			os.Exit(1)
 		}
@@ -59,19 +57,18 @@ var listCmd = &cobra.Command{
 
 func init() {
 	listCmd.Flags().BoolVar(&listAll, "all", true, "Include stopped VMs")
-	addOutputFlag(listCmd)
 	rootCmd.AddCommand(listCmd)
 }
 
 type listRow struct {
-	Name      string `json:"name"`
-	Profile   string `json:"profile"`
-	Image     string `json:"image"`
-	Status    string `json:"status"`
-	Hostname  string `json:"hostname"`
-	IP        string `json:"ip"`
-	Workspace string `json:"workspace"`
-	User      string `json:"user"`
+	Name      string
+	Profile   string
+	Image     string
+	Status    string
+	Hostname  string
+	IP        string
+	Workspace string
+	User      string
 }
 
 func buildListRows(entries []runtime.ContainerListEntry, includeStopped bool) []listRow {

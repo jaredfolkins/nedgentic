@@ -10,13 +10,6 @@ import (
 	"golang.org/x/term"
 )
 
-type Mode string
-
-const (
-	ModeText Mode = "text"
-	ModeJSON Mode = "json"
-)
-
 const (
 	prefixLeft   = "\u2310"
 	prefixDot    = "\u25ef"
@@ -28,7 +21,6 @@ const (
 )
 
 type Config struct {
-	Mode        Mode
 	Stdout      io.Writer
 	Stderr      io.Writer
 	StdoutIsTTY bool
@@ -42,7 +34,6 @@ var (
 
 func defaultConfig() Config {
 	return Config{
-		Mode:        ModeText,
 		Stdout:      os.Stdout,
 		Stderr:      os.Stderr,
 		StdoutIsTTY: writerIsTTY(os.Stdout),
@@ -54,9 +45,6 @@ func Configure(cfg Config) {
 	configMu.Lock()
 	defer configMu.Unlock()
 
-	if cfg.Mode == "" {
-		cfg.Mode = ModeText
-	}
 	if cfg.Stdout == nil {
 		cfg.Stdout = os.Stdout
 	}
@@ -70,27 +58,6 @@ func Snapshot() Config {
 	configMu.RLock()
 	defer configMu.RUnlock()
 	return config
-}
-
-func ParseMode(value string) (Mode, error) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "", string(ModeText):
-		return ModeText, nil
-	case string(ModeJSON):
-		return ModeJSON, nil
-	default:
-		return "", fmt.Errorf("unsupported output mode %q", value)
-	}
-}
-
-func CurrentMode() Mode {
-	configMu.RLock()
-	defer configMu.RUnlock()
-	return config.Mode
-}
-
-func IsStructured() bool {
-	return CurrentMode() != ModeText
 }
 
 func StdoutWriter() io.Writer {
@@ -138,20 +105,9 @@ func WriteFormattedLines(writer io.Writer, text string) {
 	}
 }
 
-func PrintInline(message string) {
-	_, _ = fmt.Fprint(StderrWriter(), Format(message))
-}
-
-func PrintInlinef(format string, args ...any) {
-	PrintInline(fmt.Sprintf(format, args...))
-}
-
 func shouldDecorate() bool {
 	configMu.RLock()
 	defer configMu.RUnlock()
-	if config.Mode != ModeText {
-		return false
-	}
 	return config.StdoutIsTTY && config.StderrIsTTY
 }
 

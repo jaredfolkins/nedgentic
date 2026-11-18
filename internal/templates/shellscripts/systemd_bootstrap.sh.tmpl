@@ -1,5 +1,5 @@
 #!/bin/sh
-if [ -n "${NED_GENTIC_DEBUG:-}" ]; then set -eux; else set -e; fi
+set -e
 USER_NAME={{.UserName}}
 USER_UID={{.UserUID}}
 USER_GID={{.UserGID}}
@@ -13,11 +13,6 @@ if [ -n "${NED_HOSTNAME:-}" ]; then
   if [ -w /etc/hostname ]; then echo "$NED_HOSTNAME" >/etc/hostname 2>/dev/null || true; fi
 fi
 GENTIC_DIR="/ned/hooks"
-if [ -n "${NED_GENTIC_DIR:-}" ]; then
-  GENTIC_DIR="$NED_GENTIC_DIR"
-elif [ ! -d "$GENTIC_DIR" ]; then
-  GENTIC_DIR={{.GenticDir}}
-fi
 if [ -d "$GENTIC_DIR" ]; then
   GENTIC_STEP=0
   now_ms() {
@@ -49,11 +44,7 @@ if [ -d "$GENTIC_DIR" ]; then
     if [ -f "$script" ]; then
       GENTIC_STEP=$((GENTIC_STEP+1))
       STEP_START=$(now_ms)
-      if [ -n "${NED_GENTIC_DEBUG:-}" ]; then
-        /bin/sh -x "$script"
-      else
-        /bin/sh "$script"
-      fi
+      /bin/sh "$script"
       STEP_END=$(now_ms)
       STEP_ELAPSED_MS=$((STEP_END-STEP_START))
       STEP_ELAPSED_FMT=$(format_ms "$STEP_ELAPSED_MS")

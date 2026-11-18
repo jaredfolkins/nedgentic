@@ -2,19 +2,8 @@ package frontend
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 )
-
-func TestNormalizeRuntimeLineItemsRejectsMalformedSuffixes(t *testing.T) {
-	_, err := normalizeRuntimeLineItems("registry name", []byte("ghcr.io\nbad?query=1\n"))
-	if err == nil {
-		t.Fatalf("expected invalid runtime line error")
-	}
-	if !strings.Contains(err.Error(), "query or fragment") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
 
 func TestSanitizeCommandOutputLinesStripsANSIAndBlankLines(t *testing.T) {
 	got := sanitizeCommandOutputLines([]byte("\x1b[31mghcr.io\x1b[0m\n\n docker.io \x00\n"))

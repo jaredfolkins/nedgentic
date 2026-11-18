@@ -32,14 +32,6 @@ func ResolveContainerBin(flags profile.Flags) (string, error) {
 	return path, nil
 }
 
-func CheckContainerRuntime(bin string) error {
-	path, err := exec.LookPath(bin)
-	if err != nil {
-		return missingContainerRuntimeError(bin, err)
-	}
-	return RequireContainerRuntimeVersion(path)
-}
-
 func containerCommandOutput(bin string, args ...string) ([]byte, error) {
 	cmd := exec.Command(bin, args...)
 	cmd.Env = os.Environ()
@@ -63,34 +55,6 @@ func containerImageExists(bin, image string) (bool, error) {
 
 func ContainerImageExists(bin, image string) (bool, error) {
 	return containerImageExists(bin, image)
-}
-
-func ImagePrune(bin string, all bool) error {
-	args := []string{"image", "prune"}
-	if all {
-		args = append(args, "--all")
-	}
-	out, err := containerCommandOutput(bin, args...)
-	if err != nil {
-		return fmt.Errorf("image prune failed: %v: %s", err, strings.TrimSpace(string(out)))
-	}
-	return nil
-}
-
-func ContainerPrune(bin string) error {
-	out, err := containerCommandOutput(bin, "prune")
-	if err != nil {
-		return fmt.Errorf("container prune failed: %v: %s", err, strings.TrimSpace(string(out)))
-	}
-	return nil
-}
-
-func BuilderDelete(bin string) error {
-	out, err := containerCommandOutput(bin, "builder", "delete", "--force")
-	if err != nil {
-		return fmt.Errorf("builder delete failed: %v: %s", err, strings.TrimSpace(string(out)))
-	}
-	return nil
 }
 
 type ContainerListEntry struct {
@@ -553,7 +517,6 @@ func genticRunnerScript(hostUser *HostUser, shellPath, workdir string, plan *Mou
 		UserGID:        hostUser.GID,
 		HomeDir:        shellQuote(GuestHomeForUser(hostUser.Name)),
 		ShellPath:      shellQuote(shellPath),
-		GenticDir:      shellQuote(GenticMountDir),
 		CopyBlock:      copyBlock,
 		ShellCommand:   shellCommand,
 		AgentAuthBlock: agentAuthBlock,
@@ -614,7 +577,6 @@ func genticBootstrapScript(hostUser *HostUser, shellPath, workdir string, plan *
 		UserGID:        hostUser.GID,
 		HomeDir:        shellQuote(GuestHomeForUser(hostUser.Name)),
 		ShellPath:      shellQuote(shellPath),
-		GenticDir:      shellQuote(GenticMountDir),
 		CopyBlock:      copyBlock,
 		AgentAuthBlock: agentAuthBlock,
 		WorkspacePath: func() string {
@@ -811,12 +773,6 @@ func buildRunArgs(opts BuildRunArgsOptions) []string {
 		args = append(args, "--mount", containerMountArg(mount))
 	}
 	env := []string{"NED_HOSTNAME=" + hostname}
-	if strings.TrimSpace(flags.GenticDir) != "" {
-		env = append(env, "NED_GENTIC_DIR="+strings.TrimSpace(flags.GenticDir))
-	}
-	if flags.GenticDebug != nil && *flags.GenticDebug {
-		env = append(env, "NED_GENTIC_DEBUG=1")
-	}
 	if opts.AgentAuth && hostUser != nil {
 		// Keep Claude's .claude.json beside its credentials on the auth volume.
 		env = append(env, "CLAUDE_CONFIG_DIR="+GuestHomeForUser(hostUser.Name)+"/.claude")
@@ -1163,32 +1119,6 @@ func RunContainer(opts RunContainerOptions) error {
 	return err
 }
 
-func containerExportArgs(id, output string) ([]string, error) {
-	containerID := strings.TrimSpace(id)
-	if containerID == "" {
-		return nil, fmt.Errorf("container ID is required")
-	}
-	args := []string{"export"}
-	if trimmed := strings.TrimSpace(output); trimmed != "" {
-		args = append(args, "--output", trimmed)
-	}
-	args = append(args, containerID)
-	return args, nil
-}
-
-func ContainerExport(bin, id, output string) error {
-	args, err := containerExportArgs(id, output)
-	if err != nil {
-		return err
-	}
-	cmd := exec.Command(bin, args...)
-	cmd.Env = os.Environ()
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-	return cmd.Run()
-}
-
 func ContainerSystemStatus(bin, format string) ([]byte, error) {
 	trimmedFormat := strings.TrimSpace(format)
 	if trimmedFormat == "" {
@@ -1225,17 +1155,6 @@ func ContainerImageTag(bin, source, target string) error {
 	return cmd.Run()
 }
 
-func ContainerImageDelete(bin, image string) error {
-	if strings.TrimSpace(image) == "" {
-		return fmt.Errorf("image name is required")
-	}
-	out, err := containerCommandOutput(bin, "image", "delete", "--force", image)
-	if err != nil {
-		return fmt.Errorf("image delete failed: %v: %s", err, strings.TrimSpace(string(out)))
-	}
-	return nil
-}
-
 func ContainerImageLoad(bin, inputPath string) error {
 	if strings.TrimSpace(inputPath) == "" {
 		return fmt.Errorf("input path is required")
@@ -1254,287 +1173,4 @@ func ContainerLogs(bin, name string) (string, error) {
 		return "", fmt.Errorf("failed to get logs: %v", err)
 	}
 	return string(out), nil
-}
-
-type ImageListEntry struct {
-	Repository string `json:"repository"`
-	Tag        string `json:"tag"`
-	ID         string `json:"id"`
-	Created    string `json:"created"`
-	Size       string `json:"size"`
-}
-
-type containerImageDescriptor struct {
-	Digest      string `json:"digest"`
-	Size        int64  `json:"size"`
-	Annotations struct {
-		Created string `json:"org.opencontainers.image.created"`
-	} `json:"annotations"`
-}
-
-type containerRuntimeImage struct {
-	Descriptor containerImageDescriptor `json:"descriptor"`
-	Reference  string                   `json:"reference"`
-	ID         string                   `json:"id"`
-	Variants   []struct {
-		Size int64 `json:"size"`
-	} `json:"variants"`
-	Configuration struct {
-		CreationDate string                   `json:"creationDate"`
-		Descriptor   containerImageDescriptor `json:"descriptor"`
-		Name         string                   `json:"name"`
-	} `json:"configuration"`
-}
-
-type containerInspectEntry struct {
-	Name     string `json:"name"`
-	Variants []struct {
-		Size int64 `json:"size"`
-	} `json:"variants"`
-	Configuration struct {
-		Name string `json:"name"`
-	} `json:"configuration"`
-	// For standard docker inspect, size might be at top level or VirtualSize
-	Size        int64 `json:"Size"`
-	VirtualSize int64 `json:"VirtualSize"`
-}
-
-func inspectEntrySize(entry containerInspectEntry) int64 {
-	if len(entry.Variants) > 0 {
-		return entry.Variants[0].Size
-	}
-	if entry.Size != 0 {
-		return entry.Size
-	}
-	return entry.VirtualSize
-}
-
-func inspectEntryName(entry containerInspectEntry) string {
-	if strings.TrimSpace(entry.Name) != "" {
-		return entry.Name
-	}
-	return entry.Configuration.Name
-}
-
-func ListImages(bin string) ([]ImageListEntry, error) {
-	out, err := containerCommandOutput(bin, "image", "list", "--format", "json")
-	if err != nil {
-		return nil, fmt.Errorf("image list failed: %w", FormatCommandOutputError(err, out))
-	}
-
-	out = sanitizeJSONOutput(out)
-	output := strings.TrimSpace(string(out))
-	if output == "" {
-		return []ImageListEntry{}, nil
-	}
-
-	rawImages, err := parseContainerRuntimeImages([]byte(output))
-	if err != nil {
-		return nil, err
-	}
-
-	var refs []string
-	for i := range rawImages {
-		if ref := containerRuntimeImageReference(rawImages[i]); ref != "" {
-			ref, err := NormalizeCLIReference("image reference", ref)
-			if err != nil {
-				return nil, fmt.Errorf("invalid image reference in runtime output: %w", err)
-			}
-			setContainerRuntimeImageReference(&rawImages[i], ref)
-			refs = append(refs, ref)
-		}
-	}
-
-	sizes := make(map[string]int64)
-	if len(refs) > 0 {
-		// Bulk inspect
-		// We process in chunks to avoid command line length limits if necessary, but for now all at once
-		inspectArgs := append([]string{"image", "inspect"}, refs...)
-		inspectOut, err := containerCommandOutput(bin, inspectArgs...)
-		if err == nil {
-			inspectOut = sanitizeJSONOutput(inspectOut)
-			var inspectResults []containerInspectEntry
-			if err := json.Unmarshal(inspectOut, &inspectResults); err == nil {
-				for _, res := range inspectResults {
-					if name := inspectEntryName(res); name != "" {
-						sizes[name] = inspectEntrySize(res)
-					}
-				}
-			}
-		}
-	}
-
-	return imageListEntriesFromRuntimeImages(rawImages, sizes), nil
-}
-
-func parseContainerRuntimeImages(output []byte) ([]containerRuntimeImage, error) {
-	output = sanitizeJSONOutput(output)
-	text := strings.TrimSpace(string(output))
-	if text == "" {
-		return []containerRuntimeImage{}, nil
-	}
-	var rawImages []containerRuntimeImage
-	if err := json.Unmarshal([]byte(text), &rawImages); err == nil {
-		return rawImages, nil
-	}
-	lines := strings.Split(text, "\n")
-	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		var img containerRuntimeImage
-		if err := json.Unmarshal([]byte(line), &img); err != nil {
-			return nil, fmt.Errorf("failed to parse image list line: %v", err)
-		}
-		rawImages = append(rawImages, img)
-	}
-	return rawImages, nil
-}
-
-func imageListEntriesFromRuntimeImages(rawImages []containerRuntimeImage, sizes map[string]int64) []ImageListEntry {
-	entries := make([]ImageListEntry, 0, len(rawImages))
-	for _, img := range rawImages {
-		ref := containerRuntimeImageReference(img)
-		repo, tag := splitRuntimeImageReference(ref)
-		if repo == "" {
-			repo = ref
-		}
-		if tag == "" {
-			tag = "<none>"
-		}
-
-		id := shortDigest(containerRuntimeImageID(img))
-
-		created := containerRuntimeImageCreated(img)
-		if created == "" {
-			created = "N/A"
-		} else {
-			created = formatImageCreated(created)
-		}
-
-		sizeBytes := containerRuntimeImageSize(img)
-		if s, ok := sizes[ref]; ok && s > 0 {
-			sizeBytes = s
-		}
-
-		entries = append(entries, ImageListEntry{
-			Repository: repo,
-			Tag:        tag,
-			ID:         id,
-			Created:    created,
-			Size:       formatSize(sizeBytes),
-		})
-	}
-	return entries
-}
-
-func splitRuntimeImageReference(ref string) (string, string) {
-	ref = strings.TrimSpace(ref)
-	if ref == "" {
-		return "", ""
-	}
-	if repo, digest, ok := strings.Cut(ref, "@"); ok {
-		if digest == "" {
-			digest = "<none>"
-		}
-		return repo, digest
-	}
-	lastSlash := strings.LastIndex(ref, "/")
-	lastColon := strings.LastIndex(ref, ":")
-	if lastColon > lastSlash {
-		return ref[:lastColon], ref[lastColon+1:]
-	}
-	return ref, "<none>"
-}
-
-func containerRuntimeImageReference(img containerRuntimeImage) string {
-	if strings.TrimSpace(img.Reference) != "" {
-		return img.Reference
-	}
-	return img.Configuration.Name
-}
-
-func setContainerRuntimeImageReference(img *containerRuntimeImage, ref string) {
-	if strings.TrimSpace(img.Reference) != "" {
-		img.Reference = ref
-		return
-	}
-	img.Configuration.Name = ref
-}
-
-func containerRuntimeImageDescriptorFor(img containerRuntimeImage) containerImageDescriptor {
-	if img.Descriptor.Digest != "" || img.Descriptor.Size != 0 || img.Descriptor.Annotations.Created != "" {
-		return img.Descriptor
-	}
-	return img.Configuration.Descriptor
-}
-
-func containerRuntimeImageID(img containerRuntimeImage) string {
-	descriptor := containerRuntimeImageDescriptorFor(img)
-	if strings.TrimSpace(descriptor.Digest) != "" {
-		return descriptor.Digest
-	}
-	return img.ID
-}
-
-func containerRuntimeImageCreated(img containerRuntimeImage) string {
-	descriptor := containerRuntimeImageDescriptorFor(img)
-	if strings.TrimSpace(descriptor.Annotations.Created) != "" {
-		return descriptor.Annotations.Created
-	}
-	return img.Configuration.CreationDate
-}
-
-func containerRuntimeImageSize(img containerRuntimeImage) int64 {
-	if len(img.Variants) > 0 && img.Variants[0].Size > 0 {
-		return img.Variants[0].Size
-	}
-	descriptor := containerRuntimeImageDescriptorFor(img)
-	return descriptor.Size
-}
-
-func formatImageCreated(raw string) string {
-	if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
-		return formatRelativeTime(t)
-	}
-	if t, err := time.Parse(time.RFC3339, raw); err == nil {
-		return formatRelativeTime(t)
-	}
-	return raw
-}
-
-func formatRelativeTime(t time.Time) string {
-	diff := time.Since(t)
-	if diff < time.Second {
-		return "Just now"
-	}
-	if diff < time.Minute {
-		return fmt.Sprintf("%d seconds ago", int(diff.Seconds()))
-	}
-	if diff < time.Hour {
-		return fmt.Sprintf("%d minutes ago", int(diff.Minutes()))
-	}
-	if diff < 24*time.Hour {
-		return fmt.Sprintf("%d hours ago", int(diff.Hours()))
-	}
-	if diff < 48*time.Hour {
-		return "Yesterday"
-	}
-	if diff < 30*24*time.Hour {
-		return fmt.Sprintf("%d days ago", int(diff.Hours()/24))
-	}
-	if diff < 12*30*24*time.Hour {
-		return fmt.Sprintf("%d months ago", int(diff.Hours()/(24*30)))
-	}
-	return fmt.Sprintf("%d years ago", int(diff.Hours()/(24*365)))
-}
-
-func shortDigest(digest string) string {
-	if strings.HasPrefix(digest, "sha256:") && len(digest) > 12 {
-		return digest[7:19]
-	}
-	if len(digest) > 12 {
-		return digest[:12]
-	}
-	return digest
 }

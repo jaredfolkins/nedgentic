@@ -6,12 +6,11 @@ import (
 	"testing"
 )
 
-func TestFormatDecoratesOnlyForInteractiveText(t *testing.T) {
+func TestFormatDecoratesOnlyForInteractiveTerminals(t *testing.T) {
 	restore := Snapshot()
 	t.Cleanup(func() { Configure(restore) })
 
 	Configure(Config{
-		Mode:        ModeText,
 		Stdout:      &bytes.Buffer{},
 		Stderr:      &bytes.Buffer{},
 		StdoutIsTTY: true,
@@ -23,18 +22,6 @@ func TestFormatDecoratesOnlyForInteractiveText(t *testing.T) {
 	}
 
 	Configure(Config{
-		Mode:        ModeJSON,
-		Stdout:      &bytes.Buffer{},
-		Stderr:      &bytes.Buffer{},
-		StdoutIsTTY: true,
-		StderrIsTTY: true,
-	})
-	if got := Format("hello"); got != "hello" {
-		t.Fatalf("expected plain output in structured mode, got %q", got)
-	}
-
-	Configure(Config{
-		Mode:        ModeText,
 		Stdout:      &bytes.Buffer{},
 		Stderr:      &bytes.Buffer{},
 		StdoutIsTTY: false,
@@ -52,7 +39,6 @@ func TestPrintWritesToConfiguredStderr(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	Configure(Config{
-		Mode:        ModeText,
 		Stdout:      &stdout,
 		Stderr:      &stderr,
 		StdoutIsTTY: false,
@@ -75,7 +61,6 @@ func TestWriteFormattedLinesDecoratesEachNonEmptyLine(t *testing.T) {
 
 	var out bytes.Buffer
 	Configure(Config{
-		Mode:        ModeText,
 		Stdout:      &bytes.Buffer{},
 		Stderr:      &bytes.Buffer{},
 		StdoutIsTTY: true,

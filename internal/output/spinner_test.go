@@ -31,7 +31,6 @@ func TestRunWithSpinnerInteractiveRendersAndClearsStep(t *testing.T) {
 
 	var stderr synchronizedBuffer
 	Configure(Config{
-		Mode:        ModeText,
 		Stdout:      &bytes.Buffer{},
 		Stderr:      &stderr,
 		StdoutIsTTY: false,

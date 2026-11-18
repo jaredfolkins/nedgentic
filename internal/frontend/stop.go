@@ -20,7 +20,7 @@ var stopCmd = &cobra.Command{
 			output.Printf("Stop failed: %v", err)
 			os.Exit(1)
 		}
-		flags := applyFlagOverrides(profile.DefaultFlags(), cmd)
+		flags := profile.DefaultFlags()
 		logging.SetLevel(logging.ParseLevel(flags.LogLevel))
 		bin, err := runtime.ResolveContainerBin(flags)
 		if err != nil {

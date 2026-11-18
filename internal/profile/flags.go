@@ -19,8 +19,6 @@ type Flags struct {
 	DNSSearch             []string `json:"dns-search"`
 	DNSOptions            []string `json:"dns-option"`
 	RemoveContainerOnExit *bool    `json:"rm-container-on-exit"`
-	GenticDir             string   `json:"gentic-dir"`
-	GenticDebug           *bool    `json:"gentic-debug"`
 	CPUs                  string   `json:"cpus"`
 	Memory                string   `json:"memory"`
 	Disk                  string   `json:"disk"`
@@ -35,7 +33,6 @@ func DefaultFlags() Flags {
 	systemd := false
 	noDNS := false
 	remove := false
-	genticDebug := false
 	return Flags{
 		LogLevel:              "info",
 		ContainerBin:          "container",
@@ -53,8 +50,6 @@ func DefaultFlags() Flags {
 		DNSSearch:             []string{},
 		DNSOptions:            []string{},
 		RemoveContainerOnExit: &remove,
-		GenticDir:             "",
-		GenticDebug:           &genticDebug,
 		CPUs:                  "",
 		Memory:                "",
 		Disk:                  "",
@@ -154,12 +149,6 @@ func MergeFlags(base, override Flags) Flags {
 	if override.RemoveContainerOnExit != nil {
 		result.RemoveContainerOnExit = override.RemoveContainerOnExit
 	}
-	if strings.TrimSpace(override.GenticDir) != "" {
-		result.GenticDir = override.GenticDir
-	}
-	if override.GenticDebug != nil {
-		result.GenticDebug = override.GenticDebug
-	}
 	if strings.TrimSpace(override.CPUs) != "" {
 		result.CPUs = override.CPUs
 	}
@@ -201,8 +190,6 @@ func FlagsEmpty(flags Flags) bool {
 		len(flags.DNSSearch) == 0 &&
 		len(flags.DNSOptions) == 0 &&
 		flags.RemoveContainerOnExit == nil &&
-		strings.TrimSpace(flags.GenticDir) == "" &&
-		flags.GenticDebug == nil &&
 		strings.TrimSpace(flags.CPUs) == "" &&
 		strings.TrimSpace(flags.Memory) == "" &&
 		strings.TrimSpace(flags.Disk) == "" &&

@@ -9,7 +9,6 @@ import (
 const (
 	DefaultShellPath    = profile.DefaultShellPath
 	SecretsMountPath    = "/mnt/ned-secrets"
-	GenticMountDir      = "/mnt/ned-gentic"
 	RunnerMountDir      = "/mnt/ned-runner"
 	WorkspaceMountDir   = "/mnt/ned-workspaces"
 	DiskMountDir        = "/mnt/ned-disk"

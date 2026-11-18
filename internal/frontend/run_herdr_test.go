@@ -7,12 +7,6 @@ import (
 	"nedgentic/internal/runtime"
 )
 
-func TestGenticCommandHerdrFlagWiring(t *testing.T) {
-	if genticCmd.PersistentFlags().Lookup("herdr") == nil {
-		t.Fatal("expected --herdr flag on gentic command")
-	}
-}
-
 func TestRunningInsideHerdrRecognizesChildMarkerAndPane(t *testing.T) {
 	restore := saveFrontendHerdrDeps()
 	defer restore()
@@ -57,7 +51,7 @@ func TestMaybeRunProfileInHerdrCreatesRunsAndAttaches(t *testing.T) {
 	}
 	herdrExecutable = func() (string, error) { return "/tmp/ned", nil }
 	herdrArguments = func() []string {
-		return []string{"gentic", "personal", "default", "docker-vm", "--herdr"}
+		return []string{"gentic", "default", "docker-vm", "--herdr"}
 	}
 	var gotCommand string
 	runHerdrPaneCommand = func(bin, paneID, command string) error {
@@ -87,7 +81,7 @@ func TestMaybeRunProfileInHerdrCreatesRunsAndAttaches(t *testing.T) {
 	if !reflect.DeepEqual(gotEnv, map[string]string{herdrChildEnv: "1"}) {
 		t.Fatalf("unexpected workspace environment: %#v", gotEnv)
 	}
-	wantCommand := "exec '/tmp/ned' 'gentic' 'personal' 'default' 'docker-vm' '--herdr'"
+	wantCommand := "exec '/tmp/ned' 'gentic' 'default' 'docker-vm' '--herdr'"
 	if gotCommand != wantCommand {
 		t.Fatalf("unexpected pane command: got %q want %q", gotCommand, wantCommand)
 	}

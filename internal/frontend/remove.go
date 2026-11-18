@@ -19,7 +19,6 @@ var removeCmd = &cobra.Command{
 	Args:    cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		flags := profile.DefaultFlags()
-		flags = applyFlagOverrides(flags, cmd)
 		logging.SetLevel(logging.ParseLevel(flags.LogLevel))
 
 		bin, err := runtime.ResolveContainerBin(flags)
@@ -65,6 +64,10 @@ var removeCmd = &cobra.Command{
 				return runtime.DeleteAgentAuthVolume(bin, name)
 			}); err != nil {
 				output.Printf("Error deleting agent logins for %s: %v", name, err)
+				failed = true
+			}
+			if err := runtime.RemoveStagingDir(name); err != nil {
+				output.Printf("Error deleting staging for %s: %v", name, err)
 				failed = true
 			}
 		}

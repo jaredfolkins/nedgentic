@@ -114,11 +114,11 @@ func TestCreateHerdrWorkspaceRejectsMissingIDs(t *testing.T) {
 }
 
 func TestHerdrExecCommandQuotesEveryArgument(t *testing.T) {
-	got, err := HerdrExecCommand("/Applications/Ned Tools/ned", []string{"gentic", "personal", "it's-safe", ""})
+	got, err := HerdrExecCommand("/Applications/Ned Tools/ned", []string{"gentic", "it's-safe", ""})
 	if err != nil {
 		t.Fatalf("HerdrExecCommand error: %v", err)
 	}
-	want := `exec '/Applications/Ned Tools/ned' 'gentic' 'personal' 'it'"'"'s-safe' ''`
+	want := `exec '/Applications/Ned Tools/ned' 'gentic' 'it'"'"'s-safe' ''`
 	if got != want {
 		t.Fatalf("unexpected command:\n got: %s\nwant: %s", got, want)
 	}

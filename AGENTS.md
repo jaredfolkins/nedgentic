@@ -2,7 +2,7 @@
 
 ## What Ned Is
 `ned` is a macOS Go CLI that wraps Apple's `container` runtime. One command
-(`ned gentic personal <profile> [vm]`) starts a sandboxed VM from the minimal
+(`ned gentic <profile> [vm]`) starts a sandboxed VM from the minimal
 image (`containers/*/minimal`) with Claude, Codex, Gemini, Grok, and opencode,
 mounts the current folder read-write, and attaches a shell. Agent CLIs update on
 boot; each VM signs in with `ned-agent-login` and keeps its logins on its own

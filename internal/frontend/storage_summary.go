@@ -9,40 +9,40 @@ import (
 )
 
 type storageUsageInfo struct {
-	Active           int    `json:"active"`
-	Total            int    `json:"total"`
-	SizeBytes        int64  `json:"size_bytes"`
-	Size             string `json:"size"`
-	ReclaimableBytes int64  `json:"reclaimable_bytes"`
-	Reclaimable      string `json:"reclaimable"`
+	Active           int
+	Total            int
+	SizeBytes        int64
+	Size             string
+	ReclaimableBytes int64
+	Reclaimable      string
 }
 
 type storageFilesystemInfo struct {
-	Filesystem string `json:"filesystem,omitempty"`
-	Mount      string `json:"mount,omitempty"`
-	SizeBytes  int64  `json:"size_bytes"`
-	Size       string `json:"size"`
-	UsedBytes  int64  `json:"used_bytes"`
-	Used       string `json:"used"`
-	FreeBytes  int64  `json:"free_bytes"`
-	Free       string `json:"free"`
-	CheckedAt  string `json:"checked_at,omitempty"`
+	Filesystem string
+	Mount      string
+	SizeBytes  int64
+	Size       string
+	UsedBytes  int64
+	Used       string
+	FreeBytes  int64
+	Free       string
+	CheckedAt  string
 }
 
 type storageSummary struct {
-	Images                *storageUsageInfo      `json:"images,omitempty"`
-	Containers            *storageUsageInfo      `json:"containers,omitempty"`
-	Volumes               *storageUsageInfo      `json:"volumes,omitempty"`
-	SystemError           string                 `json:"system_error,omitempty"`
-	RuntimeDataRoot       string                 `json:"runtime_data_root,omitempty"`
-	RuntimeDataRootError  string                 `json:"runtime_data_root_error,omitempty"`
-	RuntimeDataUsedBytes  *int64                 `json:"runtime_data_used_bytes,omitempty"`
-	RuntimeDataUsed       string                 `json:"runtime_data_used,omitempty"`
-	RuntimeDataError      string                 `json:"runtime_data_error,omitempty"`
-	OtherRuntimeDataBytes *int64                 `json:"other_runtime_data_bytes,omitempty"`
-	OtherRuntimeData      string                 `json:"other_runtime_data,omitempty"`
-	Filesystem            *storageFilesystemInfo `json:"filesystem,omitempty"`
-	FilesystemError       string                 `json:"filesystem_error,omitempty"`
+	Images                *storageUsageInfo
+	Containers            *storageUsageInfo
+	Volumes               *storageUsageInfo
+	SystemError           string
+	RuntimeDataRoot       string
+	RuntimeDataRootError  string
+	RuntimeDataUsedBytes  *int64
+	RuntimeDataUsed       string
+	RuntimeDataError      string
+	OtherRuntimeDataBytes *int64
+	OtherRuntimeData      string
+	Filesystem            *storageFilesystemInfo
+	FilesystemError       string
 }
 
 func collectStorageSummary(bin string) storageSummary {

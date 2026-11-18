@@ -51,7 +51,7 @@ func parseContainerSemver(raw string) (containerSemver, bool) {
 }
 
 func containerUpgradeHint() string {
-	return fmt.Sprintf("Upgrade with `ned runtime install` or install the latest signed package from %s.", ContainerReleasePageURL)
+	return fmt.Sprintf("Rerun ned to upgrade it, or install the latest signed package from %s.", ContainerReleasePageURL)
 }
 
 // RequireContainerRuntimeVersion fails when the runtime at bin is missing,

@@ -13,7 +13,6 @@ type RunnerData struct {
 	UserGID        int
 	HomeDir        string
 	ShellPath      string
-	GenticDir      string
 	CopyBlock      string
 	ShellCommand   string
 	WorkspacePath  string

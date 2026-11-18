@@ -1,7 +1,5 @@
 BIN_DIR := bin
-NED_LOG_LEVEL ?= info
 NED_PROFILE ?= default
-NED_CONTAINER_BIN ?= container
 # Apple's container runtime only runs on Apple silicon, so the macOS ned
 # binary is always darwin/arm64; ned checks for macOS 26+ at startup.
 NED_DARWIN_ARCH := arm64
@@ -55,7 +53,7 @@ release:
 	@echo "  gh release create $(VERSION) --repo $(RELEASE_REPO) --title $(VERSION) --generate-notes $(DIST_DIR)/$(RELEASE_ASSET) $(DIST_DIR)/$(RELEASE_NED) $(DIST_DIR)/SHA256SUMS"
 
 ned: build-ned
-	NED_LOG_LEVEL=$(NED_LOG_LEVEL) NED_CONTAINER_BIN=$(NED_CONTAINER_BIN) ./bin/ned gentic personal $(NED_PROFILE)
+	./bin/ned gentic $(NED_PROFILE)
 
 clean:
 	rm -rf $(BIN_DIR) $(DIST_DIR)

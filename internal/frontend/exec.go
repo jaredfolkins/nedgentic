@@ -17,8 +17,7 @@ var execCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
 		command := args[1:]
-		initialFlags := applyFlagOverrides(profile.DefaultFlags(), cmd)
-		bin, err := runtime.ResolveContainerBin(initialFlags)
+		bin, err := runtime.ResolveContainerBin(profile.DefaultFlags())
 		if err != nil {
 			printRuntimeResolveError(err)
 			os.Exit(1)
@@ -32,7 +31,6 @@ var execCmd = &cobra.Command{
 		if prof != nil {
 			flags = runtime.EffectiveFlags(prof)
 		}
-		flags = applyFlagOverrides(flags, cmd)
 		bin, err = runtime.ResolveContainerBin(flags)
 		if err != nil {
 			printRuntimeResolveError(err)

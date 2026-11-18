@@ -1,31 +1,15 @@
 package frontend
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 	"text/tabwriter"
 
-	"github.com/spf13/cobra"
 	"golang.org/x/term"
 	"nedgentic/internal/output"
 )
-
-// outputFlag is the --output flag on list and status commands.
-const outputFlag = "output"
-
-type listResponse[T any] struct {
-	Kind    string `json:"kind"`
-	Items   []T    `json:"items"`
-	Summary any    `json:"summary,omitempty"`
-}
-
-type singleResponse[T any] struct {
-	Kind string `json:"kind"`
-	Item T      `json:"item"`
-}
 
 // tableField is one column of a text table.
 type tableField[T any] struct {
@@ -33,44 +17,13 @@ type tableField[T any] struct {
 	Value  func(T) string
 }
 
-// addOutputFlag registers --output text|json on a read command.
-func addOutputFlag(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&flagOutput, outputFlag, "", "Output format (text or json)")
-}
-
-func configureOutput() error {
-	mode, err := output.ParseMode(strings.TrimSpace(flagOutput))
-	if err != nil {
-		return err
-	}
+func configureOutput() {
 	output.Configure(output.Config{
-		Mode:        mode,
 		Stdout:      os.Stdout,
 		Stderr:      os.Stderr,
 		StdoutIsTTY: writerIsTTY(os.Stdout),
 		StderrIsTTY: writerIsTTY(os.Stderr),
 	})
-	return nil
-}
-
-func currentOutputMode() output.Mode {
-	return output.CurrentMode()
-}
-
-// renderOutput writes value as indented JSON with --output json and calls text
-// otherwise.
-func renderOutput(cmd *cobra.Command, value any, text func(io.Writer) error) error {
-	writer := commandStdout(cmd)
-	if currentOutputMode() == output.ModeJSON {
-		return writeJSON(writer, value)
-	}
-	return text(writer)
-}
-
-func writeJSON(writer io.Writer, value any) error {
-	encoder := json.NewEncoder(writer)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(value)
 }
 
 func writeLines(writer io.Writer, lines []string) error {
@@ -121,10 +74,6 @@ func writeItemTable[T any](writer io.Writer, items []T, fields []tableField[T], 
 	return writeTable(writer, headers, rows)
 }
 
-func writeCommandOutputText(writer io.Writer, out []byte) error {
-	return writeLines(writer, splitNonEmptyLines(string(out)))
-}
-
 func splitNonEmptyLines(value string) []string {
 	trimmed := strings.TrimRight(value, "\n")
 	if strings.TrimSpace(trimmed) == "" {
@@ -139,13 +88,6 @@ func splitNonEmptyLines(value string) []string {
 		filtered = append(filtered, line)
 	}
 	return filtered
-}
-
-func commandStdout(cmd *cobra.Command) io.Writer {
-	if cmd != nil {
-		return cmd.OutOrStdout()
-	}
-	return output.StdoutWriter()
 }
 
 func writerIsTTY(writer io.Writer) bool {

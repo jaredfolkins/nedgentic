@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	nedprofile "nedgentic/internal/profile"
 	nedruntime "nedgentic/internal/runtime"
 )
 
@@ -26,15 +27,11 @@ func TestE2EAlpineDefault(t *testing.T) {
 	binDir := t.TempDir()
 	nedPath := filepath.Join(binDir, "ned")
 	buildBinary(t, repoRoot, "./cmd/ned", nedPath)
-	profileDir := t.TempDir()
-	configPath := filepath.Join(profileDir, "config.hujson")
-	config := `{
-  "image": "docker.io/library/alpine"
-}`
-	if err := os.WriteFile(configPath, []byte(config), 0600); err != nil {
-		t.Fatalf("write profile: %v", err)
-	}
 	vmName := fmt.Sprintf("e2e-alpine-%d", time.Now().UnixNano())
+	writeProfile(t, vmName, `{
+  "image": "docker.io/library/alpine",
+  "flags": { "rm-container-on-exit": true }
+}`)
 	t.Cleanup(func() {
 		cleanupVM(t, nedPath, repoRoot, vmName)
 	})
@@ -42,14 +39,14 @@ func TestE2EAlpineDefault(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, nedPath, "--profile-path", configPath, "gentic", "--rm-container-on-exit", "personal", "default", vmName)
+	cmd := exec.CommandContext(ctx, nedPath, "gentic", vmName, vmName)
 	cmd.Dir = repoRoot
 	cmd.Env = os.Environ()
 	cmd.Stdin = strings.NewReader("exit\n")
 	var output bytes.Buffer
 	cmd.Stdout = &output
 	cmd.Stderr = &output
-	t.Logf("CMD: %s", formatCommand(nedPath, "--profile-path", configPath, "gentic", "--rm-container-on-exit", "personal", "default", vmName))
+	t.Logf("CMD: %s", formatCommand(nedPath, "gentic", vmName, vmName))
 	err := cmd.Run()
 	logCommandOutput(t, output.Bytes())
 	if ctx.Err() == context.DeadlineExceeded {
@@ -121,18 +118,14 @@ func TestE2EMinimalImage(t *testing.T) {
 	})
 
 	t.Run("gentic", func(t *testing.T) {
-		configPath := filepath.Join(t.TempDir(), "config.hujson")
-		config := fmt.Sprintf("{\n  \"image\": %q\n}", imageTag)
-		if err := os.WriteFile(configPath, []byte(config), 0600); err != nil {
-			t.Fatalf("write profile: %v", err)
-		}
 		vmName := fmt.Sprintf("e2e-minimal-%d", time.Now().UnixNano())
+		writeProfile(t, vmName, fmt.Sprintf("{\n  \"image\": %q,\n  \"flags\": { \"rm-container-on-exit\": true }\n}", imageTag))
 		t.Cleanup(func() {
 			cleanupVM(t, nedPath, repoRoot, vmName)
 		})
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 		defer cancel()
-		args := []string{"--profile-path", configPath, "gentic", "--rm-container-on-exit", "personal", "default", vmName}
+		args := []string{"gentic", vmName, vmName}
 		cmd := exec.CommandContext(ctx, nedPath, args...)
 		cmd.Dir = repoRoot
 		cmd.Env = os.Environ()
@@ -155,7 +148,7 @@ func TestE2EMinimalImage(t *testing.T) {
 		}
 		// The shell prompt names the attached user, proving the bootstrap hook
 		// created the host-matching account instead of dropping into root.
-		for _, want := range []string{"Bootstrap complete: ok", "Checking for agent CLI updates in the background", "Attached: profile=default", hostUser.Username + "@"} {
+		for _, want := range []string{"Bootstrap complete: ok", "Checking for agent CLI updates in the background", "Attached: profile=" + vmName, hostUser.Username + "@"} {
 			if !strings.Contains(output.String(), want) {
 				t.Fatalf("expected %q in minimal gentic output:\n%s", want, output.String())
 			}
@@ -165,18 +158,14 @@ func TestE2EMinimalImage(t *testing.T) {
 	// Logins survive VM recreation on the auth volume; installed CLIs do not.
 	// The boot updater reinstalls the CLI of every signed-in provider only.
 	t.Run("update-reinstalls-signed-in", func(t *testing.T) {
-		configPath := filepath.Join(t.TempDir(), "config.hujson")
-		config := fmt.Sprintf("{\n  \"image\": %q\n}", imageTag)
-		if err := os.WriteFile(configPath, []byte(config), 0600); err != nil {
-			t.Fatalf("write profile: %v", err)
-		}
 		vmName := fmt.Sprintf("e2e-update-%d", time.Now().UnixNano())
+		writeProfile(t, vmName, fmt.Sprintf("{\n  \"image\": %q\n}", imageTag))
 		t.Cleanup(func() {
 			cleanupVM(t, nedPath, repoRoot, vmName)
 		})
 		bootCtx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 		defer cancel()
-		boot := exec.CommandContext(bootCtx, nedPath, "--profile-path", configPath, "gentic", "personal", "default", vmName)
+		boot := exec.CommandContext(bootCtx, nedPath, "gentic", vmName, vmName)
 		boot.Dir = repoRoot
 		boot.Env = os.Environ()
 		boot.Stdin = strings.NewReader("exit\n")
@@ -239,12 +228,8 @@ func TestE2EMinimalImage(t *testing.T) {
 	})
 
 	t.Run("desktop", func(t *testing.T) {
-		configPath := filepath.Join(t.TempDir(), "config.hujson")
-		config := fmt.Sprintf("{\n  \"image\": %q\n}", imageTag)
-		if err := os.WriteFile(configPath, []byte(config), 0600); err != nil {
-			t.Fatalf("write profile: %v", err)
-		}
 		vmName := fmt.Sprintf("e2e-desktop-%d", time.Now().UnixNano())
+		writeProfile(t, vmName, fmt.Sprintf("{\n  \"image\": %q\n}", imageTag))
 		t.Cleanup(func() {
 			cleanupVM(t, nedPath, repoRoot, vmName)
 		})
@@ -252,7 +237,7 @@ func TestE2EMinimalImage(t *testing.T) {
 		// Boot the VM and detach; it keeps running for the desktop.
 		bootCtx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 		defer cancel()
-		boot := exec.CommandContext(bootCtx, nedPath, "--profile-path", configPath, "gentic", "personal", "default", vmName)
+		boot := exec.CommandContext(bootCtx, nedPath, "gentic", vmName, vmName)
 		boot.Dir = repoRoot
 		boot.Env = os.Environ()
 		boot.Stdin = strings.NewReader("exit\n")
@@ -330,39 +315,21 @@ func TestE2EProfileEnvRejected(t *testing.T) {
 	nedPath := filepath.Join(binDir, "ned")
 	buildBinary(t, repoRoot, "./cmd/ned", nedPath)
 
-	profileDir := t.TempDir()
-	configPath := filepath.Join(profileDir, "config.hujson")
-	if err := os.WriteFile(configPath, []byte("{\"env\": {\"FOO\": \"bar\"}}"), 0600); err != nil {
-		t.Fatalf("write profile: %v", err)
-	}
 	vmName := fmt.Sprintf("e2e-env-%d", time.Now().UnixNano())
+	writeProfile(t, vmName, "{\"env\": {\"FOO\": \"bar\"}}")
 	t.Cleanup(func() {
 		cleanupVM(t, nedPath, repoRoot, vmName)
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, nedPath,
-		"--profile-path", configPath,
-		"--rm-container-on-exit",
-		"gentic",
-		"personal",
-		"default",
-		vmName,
-	)
+	cmd := exec.CommandContext(ctx, nedPath, "gentic", vmName, vmName)
 	cmd.Dir = repoRoot
 	cmd.Env = os.Environ()
 	var output bytes.Buffer
 	cmd.Stdout = &output
 	cmd.Stderr = &output
-	t.Logf("CMD: %s", formatCommand(nedPath,
-		"--profile-path", configPath,
-		"--rm-container-on-exit",
-		"gentic",
-		"personal",
-		"default",
-		vmName,
-	))
+	t.Logf("CMD: %s", formatCommand(nedPath, "gentic", vmName, vmName))
 	err := cmd.Run()
 	logCommandOutput(t, output.Bytes())
 	if ctx.Err() == context.DeadlineExceeded {
@@ -376,76 +343,26 @@ func TestE2EProfileEnvRejected(t *testing.T) {
 	}
 }
 
-func TestE2EHookDirOverride(t *testing.T) {
-	requireContainerRuntime(t)
-
-	repoRoot := repoRoot(t)
-	binDir := t.TempDir()
-	nedPath := filepath.Join(binDir, "ned")
-	buildBinary(t, repoRoot, "./cmd/ned", nedPath)
-
-	profileDir := t.TempDir()
-	configPath := filepath.Join(profileDir, "config.hujson")
-	config := `{
-  "image": "docker.io/library/alpine"
-}`
+// writeProfile writes a throwaway profile under ~/.ned/profiles/personal and
+// removes it when the test ends.
+func writeProfile(t *testing.T, name, config string) {
+	t.Helper()
+	home, err := nedprofile.ResolveHome()
+	if err != nil {
+		t.Fatalf("resolve home: %v", err)
+	}
+	configPath := nedprofile.ProfileConfigPath(home, name)
+	dir := filepath.Dir(configPath)
+	if _, err := os.Stat(dir); err == nil {
+		t.Fatalf("profile %s already exists", dir)
+	}
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatalf("create profile dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	if err := os.WriteFile(configPath, []byte(config), 0600); err != nil {
 		t.Fatalf("write profile: %v", err)
 	}
-	hookDir, err := os.MkdirTemp(repoRoot, ".e2e-hooks-")
-	if err != nil {
-		t.Fatalf("create hook dir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(hookDir) })
-	hookPath := filepath.Join(hookDir, "00-e2e.sh")
-	hookScript := "#!/bin/sh\n\necho \"E2E_GENTIC_HOOK_OK\"\n"
-	if err := os.WriteFile(hookPath, []byte(hookScript), 0700); err != nil {
-		t.Fatalf("write hook: %v", err)
-	}
-
-	vmName := fmt.Sprintf("e2e-gentic-%d", time.Now().UnixNano())
-	t.Cleanup(func() {
-		cleanupVM(t, nedPath, repoRoot, vmName)
-	})
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, nedPath,
-		"--profile-path", configPath,
-		"--rm-container-on-exit",
-		"gentic",
-		"personal",
-		"--hook-dir", hookDir,
-		"default",
-		vmName,
-	)
-	cmd.Dir = repoRoot
-	cmd.Env = os.Environ()
-	cmd.Stdin = strings.NewReader("exit\n")
-	var output bytes.Buffer
-	cmd.Stdout = &output
-	cmd.Stderr = &output
-	t.Logf("CMD: %s", formatCommand(nedPath,
-		"--profile-path", configPath,
-		"--rm-container-on-exit",
-		"gentic",
-		"personal",
-		"--hook-dir", hookDir,
-		"default",
-		vmName,
-	))
-	err = cmd.Run()
-	logCommandOutput(t, output.Bytes())
-	if ctx.Err() == context.DeadlineExceeded {
-		t.Fatal("ned gentic hook override timed out")
-	}
-	if err != nil {
-		t.Fatalf("ned gentic hook override failed: %v\n%s", err, output.String())
-	}
-	if !strings.Contains(output.String(), "E2E_GENTIC_HOOK_OK") {
-		t.Fatalf("expected hook output missing:\n%s", output.String())
-	}
-	logVMs(t, nedPath, repoRoot)
 }
 
 func requireContainerRuntime(t *testing.T) {
@@ -499,6 +416,12 @@ func cleanupVM(t *testing.T, nedPath, repoRoot, name string) {
 	cmd.Dir = repoRoot
 	cmd.Env = os.Environ()
 	_ = cmd.Run()
+	// ned keeps a VM's staging directory; drop the one this test created.
+	if home, err := nedprofile.ResolveHome(); err == nil {
+		if dir, err := nedprofile.StagingVMDir(home, name); err == nil {
+			_ = os.RemoveAll(dir)
+		}
+	}
 }
 
 func runLoggedCommand(t *testing.T, ctx context.Context, dir string, env []string, name string, args ...string) ([]byte, error) {
@@ -537,25 +460,4 @@ func logCommandOutput(t *testing.T, out []byte) {
 		return
 	}
 	t.Logf("OUTPUT:\n%s", trimmed)
-}
-
-func stripANSI(value string) string {
-	var b strings.Builder
-	b.Grow(len(value))
-	inEscape := false
-	for i := 0; i < len(value); i++ {
-		ch := value[i]
-		if inEscape {
-			if (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') {
-				inEscape = false
-			}
-			continue
-		}
-		if ch == 0x1b {
-			inEscape = true
-			continue
-		}
-		b.WriteByte(ch)
-	}
-	return b.String()
 }

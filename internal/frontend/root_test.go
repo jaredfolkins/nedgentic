@@ -1,48 +1,38 @@
 package frontend
 
-import "slices"
+import (
+	"slices"
+	"testing"
 
-import "testing"
+	"github.com/spf13/pflag"
+)
 
-func TestShouldSkipRuntimeCheck(t *testing.T) {
-	if !shouldSkipRuntimeCheck(runtimeInstallCmd) {
-		t.Fatalf("expected runtime install to skip runtime check")
+func TestRootCommandsAreTheCoreSet(t *testing.T) {
+	var names []string
+	for _, cmd := range rootCmd.Commands() {
+		names = append(names, cmd.Name())
 	}
-	if !shouldSkipRuntimeCheck(runtimeRemoveCmd) {
-		t.Fatalf("expected runtime remove to skip runtime check")
+	slices.Sort(names)
+	want := []string{"desktop", "exec", "gentic", "list", "remove", "start", "stop"}
+	if !slices.Equal(names, want) {
+		t.Fatalf("unexpected commands: got %v want %v", names, want)
 	}
-	if !shouldSkipRuntimeCheck(runtimeCmd) {
-		t.Fatalf("expected runtime to skip runtime check")
-	}
-	if shouldSkipRuntimeCheck(genticCmd) {
-		t.Fatalf("did not expect gentic to skip runtime check")
-	}
-	if shouldSkipRuntimeCheck(rootCmd) {
-		t.Fatalf("did not expect root to skip runtime check")
+	if rootCmd.HasAvailablePersistentFlags() {
+		t.Fatal("ned must not define global flags")
 	}
 }
 
 func TestRemoveHasAlias(t *testing.T) {
-	found := false
-	for _, cmd := range rootCmd.Commands() {
-		if cmd.Name() != "remove" {
-			continue
-		}
-		found = true
-		if slices.Contains(cmd.Aliases, "rm") {
-			return
-		}
-		t.Fatalf("expected remove to have rm alias")
+	cmd, _, err := rootCmd.Find([]string{"remove"})
+	if err != nil {
+		t.Fatalf("find remove: %v", err)
 	}
-	if !found {
-		t.Fatalf("expected remove command")
+	if !slices.Contains(cmd.Aliases, "rm") {
+		t.Fatalf("expected remove to have rm alias")
 	}
 }
 
 func TestShouldSkipDependencyCheck(t *testing.T) {
-	if !shouldSkipDependencyCheck(runtimeInstallCmd) {
-		t.Fatalf("expected runtime install to skip dependency check")
-	}
 	if !shouldSkipDependencyCheck(rootCmd) {
 		t.Fatalf("expected root to skip dependency check")
 	}
@@ -51,41 +41,23 @@ func TestShouldSkipDependencyCheck(t *testing.T) {
 	}
 }
 
-func TestImageBuildPushAndRegistryLoginAreRemoved(t *testing.T) {
-	for _, path := range [][]string{{"build"}, {"login"}, {"logout"}, {"registry"}, {"image", "push"}, {"image", "login"}, {"image", "logout"}} {
-		if _, err := resolveCommandPath(rootCmd, path); err == nil {
-			t.Fatalf("ned must not offer `ned %v`", path)
+func TestGenticTakesProfileDirectly(t *testing.T) {
+	if genticCmd.Args(genticCmd, nil) == nil {
+		t.Fatal("ned gentic must require a profile")
+	}
+	if err := genticCmd.Args(genticCmd, []string{"default", "work-a"}); err != nil {
+		t.Fatalf("ned gentic <profile> [vm] rejected: %v", err)
+	}
+	if genticCmd.HasSubCommands() {
+		t.Fatal("ned gentic must not have subcommands")
+	}
+	var flags []string
+	genticCmd.LocalFlags().VisitAll(func(f *pflag.Flag) {
+		if f.Name != "help" {
+			flags = append(flags, f.Name)
 		}
-	}
-	for _, path := range [][]string{{"image", "pull"}, {"image", "list"}} {
-		if _, err := resolveCommandPath(rootCmd, path); err != nil {
-			t.Fatalf("expected `ned %v`: %v", path, err)
-		}
-	}
-	if rootCmd.PersistentFlags().Lookup("build-pull") != nil {
-		t.Fatal("ned must not offer --build-pull")
-	}
-}
-
-func TestSystemProfileScopeIsRemoved(t *testing.T) {
-	if _, err := resolveCommandPath(rootCmd, []string{"gentic", "system"}); err == nil {
-		t.Fatal("ned must not offer `ned gentic system`")
-	}
-	if _, err := resolveCommandPath(rootCmd, []string{"gentic", "personal"}); err != nil {
-		t.Fatalf("expected `ned gentic personal`: %v", err)
-	}
-}
-
-func TestHostExecIsRemoved(t *testing.T) {
-	if _, err := resolveCommandPath(rootCmd, []string{"hostexec"}); err == nil {
-		t.Fatal("ned must not offer `ned hostexec`")
-	}
-	for _, name := range []string{"host-exec", "host-exec-bin", "host-exec-allow-ned"} {
-		if genticCmd.PersistentFlags().Lookup(name) != nil {
-			t.Fatalf("ned gentic must not offer --%s", name)
-		}
-	}
-	if genticCmd.PersistentFlags().Lookup("herdr") == nil {
-		t.Fatal("expected --herdr on ned gentic")
+	})
+	if !slices.Equal(flags, []string{"herdr"}) {
+		t.Fatalf("unexpected gentic flags: %v", flags)
 	}
 }

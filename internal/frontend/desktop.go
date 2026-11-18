@@ -127,7 +127,7 @@ func resolveDesktopTarget(cmd *cobra.Command, args []string) (desktopTarget, err
 	if err != nil {
 		return desktopTarget{}, err
 	}
-	flags := applyFlagOverrides(profile.DefaultFlags(), cmd)
+	flags := profile.DefaultFlags()
 	logging.SetLevel(logging.ParseLevel(flags.LogLevel))
 	bin, err := runtime.ResolveContainerBin(flags)
 	if err != nil {
@@ -139,7 +139,7 @@ func resolveDesktopTarget(cmd *cobra.Command, args []string) (desktopTarget, err
 	}
 	entry, ok := findContainerEntry(entries, name)
 	if !ok {
-		return desktopTarget{}, fmt.Errorf("VM %s not found; start it with `ned gentic personal <profile> %s`", name, name)
+		return desktopTarget{}, fmt.Errorf("VM %s not found; start it with `ned gentic <profile> %s`", name, name)
 	}
 	if !isRunningStatus(entry.Status) {
 		return desktopTarget{}, fmt.Errorf("VM %s is %s; start it with `ned gentic` first", name, fieldOrDashText(entry.Status))
@@ -149,7 +149,7 @@ func resolveDesktopTarget(cmd *cobra.Command, args []string) (desktopTarget, err
 		return desktopTarget{}, fmt.Errorf("resolve profile: %w", err)
 	}
 	if prof != nil {
-		flags = applyFlagOverrides(runtime.EffectiveFlags(prof), cmd)
+		flags = runtime.EffectiveFlags(prof)
 	}
 	shellPath, err := runtime.ResolveShellPath(prof)
 	if err != nil {
@@ -174,7 +174,7 @@ func resolveDesktopTarget(cmd *cobra.Command, args []string) (desktopTarget, err
 	}, nil
 }
 
-// desktopVMName returns the named VM, or the VM `ned gentic personal default` creates.
+// desktopVMName returns the named VM, or the VM `ned gentic default` creates.
 func desktopVMName(args []string) (string, error) {
 	if len(args) > 0 {
 		return normalizeAgentName("vm name", args[0])

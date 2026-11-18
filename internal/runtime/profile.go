@@ -70,7 +70,7 @@ func LoadProfile(pathOverride string, require bool, profileName string) (*Profil
 	loaded, err := ParseProfileConfig(content)
 	if err != nil {
 		if strings.Contains(err.Error(), `unknown field "tools"`) {
-			return nil, fmt.Errorf("failed to parse profile %s: imports.tools was removed because copying host agent logins breaks them when tokens rotate; delete the tools entry (or run `ned profile install --overwrite` for shipped profiles) and sign in inside the VM with ned-agent-login: %w", configPath, err)
+			return nil, fmt.Errorf("failed to parse profile %s: imports.tools was removed because copying host agent logins breaks them when tokens rotate; delete the tools entry and sign in inside the VM with ned-agent-login: %w", configPath, err)
 		}
 		return nil, fmt.Errorf("failed to parse profile %s: %w", configPath, err)
 	}
@@ -91,10 +91,6 @@ func LoadProfile(pathOverride string, require bool, profileName string) (*Profil
 	if err := rejectHostAgentAuthImports(&loaded); err != nil {
 		return nil, fmt.Errorf("profile %s: %w", configPath, err)
 	}
-	// Gentic hooks are sourced from the image; host overrides live under profileDir/gentic when provided.
-	// Build files are no longer automatically generated in the profile directory
-	// User is expected to build images from source containers/ directory
-
 	return &loaded, nil
 }
 
@@ -277,44 +273,6 @@ func ResolveShellPath(profile *Profile) (string, error) {
 		return "", fmt.Errorf("shell path must be absolute: %s", shell)
 	}
 	return shell, nil
-}
-
-func EnsureGenticScripts(profileDir, imageRef string) error {
-	if profileDir == "" {
-		return fmt.Errorf("profile directory is required")
-	}
-	_ = imageRef
-	genticDir := filepath.Join(profileDir, profile.GenticDirName)
-	if _, err := os.Stat(genticDir); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	return nil
-}
-
-func GenticScriptsPresent(profileDir string) (bool, error) {
-	if strings.TrimSpace(profileDir) == "" {
-		return false, fmt.Errorf("profile directory is required")
-	}
-	genticDir := filepath.Join(profileDir, profile.GenticDirName)
-	entries, err := os.ReadDir(genticDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		if strings.HasSuffix(entry.Name(), ".sh") {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 func WriteProfileTemplate(path, image string, force bool) error {

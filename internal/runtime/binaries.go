@@ -12,21 +12,17 @@ import (
 	"nedgentic/internal/profile"
 )
 
-func ApplyHostBinaries(prof *Profile, extras []string) error {
-	if prof == nil {
-		return nil
-	}
-	combined := make([]string, 0, len(prof.Binaries)+len(extras))
-	combined = append(combined, prof.Binaries...)
-	combined = append(combined, extras...)
-	if len(combined) == 0 {
+// ApplyHostBinaries adds the profile's "binaries" as file copies into
+// /usr/local/bin.
+func ApplyHostBinaries(prof *Profile) error {
+	if prof == nil || len(prof.Binaries) == 0 {
 		return nil
 	}
 	if prof.Files == nil {
 		prof.Files = []profile.FileMount{}
 	}
 	seen := map[string]struct{}{}
-	for _, spec := range combined {
+	for _, spec := range prof.Binaries {
 		spec = strings.TrimSpace(spec)
 		if spec == "" {
 			continue

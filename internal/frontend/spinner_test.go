@@ -19,7 +19,6 @@ func TestRunWithSpinnerStepSuppressesNonTTYFinalOutput(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	output.Configure(output.Config{
-		Mode:        output.ModeText,
 		Stdout:      &stdout,
 		Stderr:      &stderr,
 		StdoutIsTTY: false,
@@ -46,7 +45,6 @@ func TestRunWithSpinnerKeepsNonTTYFinalOutput(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	output.Configure(output.Config{
-		Mode:        output.ModeText,
 		Stdout:      &stdout,
 		Stderr:      &stderr,
 		StdoutIsTTY: false,

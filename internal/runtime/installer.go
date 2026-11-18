@@ -195,54 +195,6 @@ func installerContainerNeedsUpgrade(path string) (bool, string) {
 	return false, ""
 }
 
-func RemoveContainerRuntime(out io.Writer, opts RuntimeActionOptions) error {
-	if out == nil {
-		out = io.Discard
-	}
-
-	var containerPath string
-	if path, err := resolveContainerRuntimePath("", installerLookPath, installerCommandOutput); err == nil {
-		containerPath = path
-		if err := StopContainerRuntime(out, containerPath, opts); err != nil {
-			return err
-		}
-	}
-
-	if brewPath, err := installerLookPath(ContainerBrewBinary); err == nil {
-		fmt.Fprintf(out, "Homebrew detected at %s\n", brewPath)
-		if _, err := installerCommandOutput(brewPath, "list", "--versions", ContainerBrewFormula); err == nil {
-			fmt.Fprintf(out, "Removing %s via Homebrew...\n", ContainerBrewFormula)
-			if err := runOrPrint(out, opts, brewPath, "uninstall", ContainerBrewFormula); err != nil {
-				return fmt.Errorf("brew uninstall failed: %v", err)
-			}
-			return nil
-		}
-		if strings.TrimSpace(containerPath) != "" {
-			fmt.Fprintln(out, "Homebrew does not report container installed; skipping brew uninstall.")
-			fmt.Fprintln(out, "Runtime appears installed outside Homebrew.")
-			fmt.Fprintf(out, "Removing runtime with %s (sudo required)...\n", installerUninstallPath())
-			if err := runOrPrint(out, opts, installerSudoCommand(), installerUninstallPath(), "-d"); err != nil {
-				return fmt.Errorf("uninstall script failed: %v", err)
-			}
-			return nil
-		}
-		fmt.Fprintln(out, "Homebrew does not report container installed; nothing to remove.")
-		return nil
-	}
-
-	if containerPath == "" {
-		fmt.Fprintln(out, "container runtime not found; nothing to remove.")
-		return nil
-	}
-
-	fmt.Fprintln(out, "Homebrew not found; removing runtime with signed pkg uninstall.")
-	fmt.Fprintf(out, "Removing runtime with %s (sudo required)...\n", installerUninstallPath())
-	if err := runOrPrint(out, opts, installerSudoCommand(), installerUninstallPath(), "-d"); err != nil {
-		return fmt.Errorf("uninstall script failed: %v", err)
-	}
-	return nil
-}
-
 func StopContainerRuntime(out io.Writer, bin string, opts RuntimeActionOptions) error {
 	if out == nil {
 		out = io.Discard
@@ -408,7 +360,7 @@ func missingContainerRuntimeError(bin string, cause error) error {
 	if cause != nil {
 		base = fmt.Sprintf("%s: %v", base, cause)
 	}
-	return fmt.Errorf("%s. Install with `ned runtime install`, or manually: `brew install %s` or download the signed installer from %s and run `sudo installer -pkg %s -target /`, then `container system start --enable-kernel-install`.", base, ContainerBrewFormula, ContainerReleasePageURL, ContainerSignedPkgHint)
+	return fmt.Errorf("%s. Rerun ned to install it, or install it manually: `brew install %s` or download the signed installer from %s and run `sudo installer -pkg %s -target /`, then `container system start --enable-kernel-install`.", base, ContainerBrewFormula, ContainerReleasePageURL, ContainerSignedPkgHint)
 }
 
 func runOrPrint(out io.Writer, opts RuntimeActionOptions, name string, args ...string) error {
@@ -427,13 +379,6 @@ func installerSudoCommand() string {
 		return override
 	}
 	return "sudo"
-}
-
-func installerUninstallPath() string {
-	if override := strings.TrimSpace(os.Getenv(installerTestUninstallPathEnv)); override != "" {
-		return override
-	}
-	return ContainerUninstallPath
 }
 
 func commandString(name string, args ...string) string {
