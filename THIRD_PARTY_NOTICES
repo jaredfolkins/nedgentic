@@ -1,0 +1,17 @@
+Third-party software
+
+The ned binary is built from this repository (MIT, see LICENSE) and the Go
+modules listed in go.mod, each under its own open-source license.
+
+The ned-minimal image released alongside ned contains:
+
+- Debian trixie packages, including Chromium, Xvfb, x11vnc, JWM, xterm, and
+  their dependencies. Each package's license is in the image at
+  /usr/share/doc/<package>/copyright.
+- noVNC web files taken from Debian's novnc package (MPL-2.0; see
+  /usr/share/doc/novnc/copyright in the image).
+- Scripts from this repository (MIT).
+
+The image does not contain Claude Code, Codex, Gemini CLI, Grok CLI, or
+opencode. ned-agent-install downloads each one from its vendor when you choose
+to sign in to it, under that vendor's own license and terms.

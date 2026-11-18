@@ -1,0 +1,61 @@
+#!/bin/sh
+# Keep this VM's agent CLIs current. Runs in the background at VM boot
+# (/ned/hooks/03-agent-updates.sh); rerun by hand with `sudo ned-agent-update`.
+#
+# Logins live on the per-VM auth volume and survive VM recreation; installed
+# CLIs do not. So every provider with a saved login gets its CLI (re)installed,
+# installed CLIs are updated, and nothing is installed for the rest.
+set -u
+# The VM sets this for the user; root's version checks must not touch it.
+unset CLAUDE_CONFIG_DIR
+
+READY_FILE=/tmp/ned-ready
+READY_WAIT=120
+STEP_TIMEOUT=900
+HOME_DIR=${HOME_DIR:-}
+status=0
+
+# step NAME CMD...: run one install or update with a timeout and record it.
+step() {
+  name=$1
+  shift
+  echo "== $name"
+  if timeout "$STEP_TIMEOUT" "$@" </dev/null; then
+    echo "ok: $name"
+    return 0
+  fi
+  echo "failed: $name"
+  status=1
+  return 1
+}
+
+# The runner links the login dirs into the auth volume just before it marks
+# the VM ready; wait so the credential checks see them.
+waited=0
+while [ ! -e "$READY_FILE" ] && [ "$waited" -lt "$READY_WAIT" ]; do
+  sleep 1
+  waited=$((waited + 1))
+done
+# The boot hook passes HOME_DIR; by hand, `sudo ned-agent-update` names the user.
+VM_USER=${USER_NAME:-${SUDO_USER:-}}
+if [ -z "$HOME_DIR" ] && [ -n "$VM_USER" ]; then
+  HOME_DIR=$(getent passwd "$VM_USER" | cut -d: -f6)
+fi
+
+for id in $(ned-agent-install --list); do
+  if [ -x "/usr/local/bin/$id" ]; then
+    step "update $id" ned-agent-install --update "$id"
+  elif [ -n "$HOME_DIR" ] && ned-agent-install --signed-in "$id" "$HOME_DIR"; then
+    step "install $id (signed in)" ned-agent-install "$id"
+  else
+    echo "skip: $id (not installed, not signed in)"
+  fi
+done
+
+for id in $(ned-agent-install --list); do
+  if [ -x "/usr/local/bin/$id" ]; then
+    printf '%s: ' "$id"
+    "$id" --version 2>&1 | head -n 1
+  fi
+done
+exit "$status"

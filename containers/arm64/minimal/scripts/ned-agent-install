@@ -1,0 +1,241 @@
+#!/bin/sh
+# ned-agent-install: install agent CLIs on demand with their official installers.
+#
+#   ned-agent-install <provider>...            install the latest CLI if missing
+#   ned-agent-install --update <provider>...   update an installed CLI
+#   ned-agent-install --signed-in <provider> [home]
+#                                              exit 0 when home has a saved login
+#   ned-agent-install --list                   print the provider ids
+#
+# Providers: claude codex gemini grok opencode. Installs live under a shared
+# root-owned HOME (/opt/ned-agents) and are linked into /usr/local/bin, so they
+# stay out of the VM user's login dirs. Gemini also installs Node (latest LTS).
+# Run as the VM user (it re-runs itself through sudo) or as root.
+set -eu
+
+PROVIDERS="claude codex gemini grok opencode"
+AGENT_HOME=/opt/ned-agents
+BIN_DIR=/usr/local/bin
+LOCK_DIR=/run/lock
+FETCH_TIMEOUT=600
+LOCK_TIMEOUT=900
+
+usage() {
+  sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+die() {
+  echo "ned-agent-install: $*" >&2
+  exit 1
+}
+
+known() {
+  for known_id in $PROVIDERS; do
+    [ "$known_id" = "$1" ] && return 0
+  done
+  return 1
+}
+
+# credential PROVIDER: the saved-login file, relative to the user's home.
+# ned-agent-login checks the same files.
+credential() {
+  case "$1" in
+    claude) echo .claude/.credentials.json ;;
+    codex) echo .codex/auth.json ;;
+    gemini) echo .gemini/oauth_creds.json ;;
+    grok) echo .grok/auth.json ;;
+    opencode) echo .local/share/opencode/auth.json ;;
+  esac
+}
+
+installed() {
+  [ -x "$BIN_DIR/$1" ]
+}
+
+fetch() {
+  curl -fsSL --retry 3 --connect-timeout 20 --max-time "$FETCH_TIMEOUT" -o "$2" "$1"
+}
+
+# relink TARGET NAME: point /usr/local/bin/NAME at an install under AGENT_HOME.
+relink() {
+  [ -x "$1" ] || die "$2 did not install to $1"
+  ln -sfn "$1" "$BIN_DIR/$2"
+}
+
+# agent_env [NAME=VALUE]... CMD...: run CMD with the shared install home (its
+# bin dir on PATH so installers find their own launchers). The VM sets
+# CLAUDE_CONFIG_DIR for the user; drop it and other per-user config paths so
+# installs never write into the user's login dirs.
+agent_env() {
+  env -u CLAUDE_CONFIG_DIR -u CODEX_HOME -u XDG_CONFIG_HOME -u XDG_DATA_HOME \
+    -u XDG_CACHE_HOME -u XDG_STATE_HOME \
+    HOME="$AGENT_HOME" PATH="$AGENT_HOME/.local/bin:$PATH" "$@" </dev/null
+}
+
+# fetch_installer URL: download an official installer to $installer.
+fetch_installer() {
+  installer="$WORK_DIR/install.sh"
+  fetch "$1" "$installer"
+}
+
+install_claude() {
+  fetch_installer https://claude.ai/install.sh
+  # The installer refuses sudo by default; the shared home is intentional.
+  agent_env CLAUDE_INSTALL_ALLOW_SUDO=1 bash "$installer"
+  relink "$AGENT_HOME/.local/bin/claude" claude
+}
+
+update_claude() {
+  agent_env claude update
+  relink "$AGENT_HOME/.local/bin/claude" claude
+}
+
+install_codex() {
+  fetch_installer https://github.com/openai/codex/releases/latest/download/install.sh
+  agent_env CODEX_HOME="$AGENT_HOME/.codex" CODEX_NON_INTERACTIVE=1 sh "$installer"
+  relink "$AGENT_HOME/.local/bin/codex" codex
+}
+
+update_codex() {
+  install_codex
+}
+
+install_grok() {
+  fetch_installer https://x.ai/cli/install.sh
+  agent_env bash "$installer"
+  relink "$AGENT_HOME/.grok/bin/grok" grok
+}
+
+update_grok() {
+  agent_env grok update
+  relink "$AGENT_HOME/.grok/bin/grok" grok
+}
+
+install_opencode() {
+  fetch_installer https://opencode.ai/install
+  agent_env bash "$installer" --no-modify-path
+  relink "$AGENT_HOME/.opencode/bin/opencode" opencode
+}
+
+update_opencode() {
+  install_opencode
+}
+
+# install_node: the latest Node LTS from nodejs.org, checked against its
+# published SHASUMS256.txt. Reused when already current.
+install_node() {
+  case "$(uname -m)" in
+    aarch64|arm64) node_arch=arm64 ;;
+    x86_64) node_arch=x64 ;;
+    *) die "unsupported architecture for Node: $(uname -m)" ;;
+  esac
+  fetch https://nodejs.org/dist/index.json "$WORK_DIR/index.json"
+  node_version=$(grep -o '{"version":"v[0-9.]*"[^}]*"lts":"[^"]*"' "$WORK_DIR/index.json" |
+    head -n 1 | sed 's/^{"version":"\(v[0-9.]*\)".*/\1/')
+  [ -n "$node_version" ] || die "could not find the latest Node LTS"
+  node_dir="$AGENT_HOME/node-$node_version"
+  if [ ! -x "$node_dir/bin/node" ]; then
+    tarball="node-$node_version-linux-$node_arch.tar.gz"
+    fetch "https://nodejs.org/dist/$node_version/$tarball" "$WORK_DIR/$tarball"
+    fetch "https://nodejs.org/dist/$node_version/SHASUMS256.txt" "$WORK_DIR/SHASUMS256.txt"
+    (cd "$WORK_DIR" && grep " $tarball\$" SHASUMS256.txt | sha256sum -c -) ||
+      die "Node download failed its checksum"
+    mkdir -p "$node_dir.tmp"
+    tar -xzf "$WORK_DIR/$tarball" -C "$node_dir.tmp" --strip-components=1 --no-same-owner
+    rm -rf "$node_dir"
+    mv "$node_dir.tmp" "$node_dir"
+  fi
+  ln -sfn "$node_dir" "$AGENT_HOME/node"
+  for old in "$AGENT_HOME"/node-v*; do
+    [ "$old" = "$node_dir" ] || rm -rf "$old"
+  done
+  for tool in node npm npx; do
+    relink "$AGENT_HOME/node/bin/$tool" "$tool"
+  done
+}
+
+install_gemini() {
+  install_node
+  agent_env npm install -g --prefix "$AGENT_HOME/npm" --no-fund --no-audit @google/gemini-cli@latest
+  agent_env npm cache clean --force >/dev/null 2>&1 || true
+  rm -rf "$AGENT_HOME/.cache/node-gyp"
+  relink "$AGENT_HOME/npm/bin/gemini" gemini
+}
+
+update_gemini() {
+  install_gemini
+}
+
+# with_lock PROVIDER CMD...: one install per provider at a time, so the boot
+# updater and the sign-in walkthrough never race.
+with_lock() {
+  lock_file="$LOCK_DIR/ned-agent-install-$1.lock"
+  shift
+  mkdir -p "$LOCK_DIR"
+  (
+    flock -w "$LOCK_TIMEOUT" 9 || die "timed out waiting for another install"
+    "$@"
+  ) 9>"$lock_file"
+}
+
+ensure() {
+  if installed "$1"; then
+    return 0
+  fi
+  echo "Installing $1 (latest)..."
+  "install_$1"
+}
+
+refresh() {
+  if ! installed "$1"; then
+    echo "$1 is not installed; skipping update."
+    return 0
+  fi
+  "update_$1"
+}
+
+case "${1:-}" in
+  ""|-h|--help) usage; [ -n "${1:-}" ] || exit 2; exit 0 ;;
+  --list) echo "$PROVIDERS" | tr ' ' '\n'; exit 0 ;;
+  --signed-in)
+    [ "$#" -ge 2 ] && known "$2" || die "usage: ned-agent-install --signed-in <provider> [home]"
+    [ -s "${3:-$HOME}/$(credential "$2")" ]
+    exit
+    ;;
+  _run)
+    # _run ensure|refresh PROVIDER: one provider in its own process, so set -e
+    # stops at the first failing step.
+    umask 022
+    WORK_DIR=$(mktemp -d)
+    trap 'rm -rf "$WORK_DIR"' EXIT INT TERM
+    with_lock "$3" "$2" "$3"
+    exit
+    ;;
+esac
+action=ensure
+if [ "$1" = --update ]; then
+  action=refresh
+  shift
+fi
+[ "$#" -gt 0 ] || die "name at least one provider: $PROVIDERS"
+for id in "$@"; do
+  known "$id" || die "unknown provider $id (want one of: $PROVIDERS)"
+done
+
+if [ "$(id -u)" -ne 0 ]; then
+  command -v sudo >/dev/null 2>&1 || die "run as root (sudo is not installed)"
+  # Keep the VM's proxy settings for the downloads.
+  keep=HTTP_PROXY,HTTPS_PROXY,NO_PROXY,http_proxy,https_proxy,no_proxy
+  if [ "$action" = refresh ]; then
+    exec sudo -n --preserve-env="$keep" "$0" --update "$@"
+  fi
+  exec sudo -n --preserve-env="$keep" "$0" "$@"
+fi
+
+mkdir -p "$AGENT_HOME"
+status=0
+for id in "$@"; do
+  "$0" _run "$action" "$id" || status=1
+done
+chmod -R a+rX "$AGENT_HOME"
+exit "$status"

@@ -1,0 +1,40 @@
+SHELL_PATH={{.ShellPath}}
+if [ ! -x "$SHELL_PATH" ]; then SHELL_PATH=/bin/sh; fi
+SHELL_BASE=$(basename "$SHELL_PATH")
+HOSTNAME=$(hostname)
+{{- if .Workdir }}
+if [ -d {{.Workdir}} ]; then cd {{.Workdir}}; fi
+{{- end }}
+NED_PROMPT_PREFIX="$(printf '\033[38;5;180m[\033[38;5;15m\342\214\220\033[38;5;251m\342\227\257\033[38;5;15m-\033[38;5;251m\342\227\257\033[38;5;180m]\033[0m')"
+NED_PROMPT_USER=${USER:-${LOGNAME:-user}}
+PS1=''
+PROMPT=''
+case "$SHELL_BASE" in
+  zsh)
+    PROMPT="%{$NED_PROMPT_PREFIX%} %F{#ffd6a0}${NED_PROMPT_USER}@%m%f %F{#ffc57a}%~%f %F{#ffb066}%#%f "
+    ;;
+  bash)
+    PS1="\[$NED_PROMPT_PREFIX\] \[\e[38;2;255;214;160m\]${NED_PROMPT_USER}@\h\[\e[0m\] \[\e[38;2;255;197;122m\]\w\[\e[0m\] \[\e[38;2;255;176;102m\]\\$\[\e[0m\] "
+    ;;
+  sh|dash)
+    PS1='$USER@$HOSTNAME [$PWD] $ '
+    ;;
+  *)
+    PS1='\u@\h [\w] \$ '
+    ;;
+esac
+if [ -n "$PS1" ]; then export PS1="$PS1"; fi
+if [ -n "$PROMPT" ]; then export PROMPT="$PROMPT"; fi
+if [ -t 0 ] && [ -t 1 ] && [ -x /bin/bash ] && [ -x /usr/local/bin/ned-agent-login ]; then
+  /usr/local/bin/ned-agent-login --attach || true
+fi
+SHELL_ARGS=''
+if [ "$SHELL_BASE" = "bash" ] || [ "$SHELL_BASE" = "zsh" ]; then SHELL_ARGS='-l'; fi
+export SHELL="$SHELL_PATH"
+SHELL_CMD="$SHELL_PATH"
+if [ -n "$SHELL_ARGS" ]; then SHELL_CMD="$SHELL_CMD $SHELL_ARGS"; fi
+if command -v script >/dev/null 2>&1; then
+  exec script -q /dev/null -c "$SHELL_CMD"
+fi
+"$SHELL_PATH" $SHELL_ARGS
+exit 0

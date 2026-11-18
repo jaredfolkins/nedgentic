@@ -1,0 +1,8 @@
+/bin/
+*.test
+*.out
+.DS_Store
+*.swp
+containers/*/dist/
+/dist/
+/.lemc/

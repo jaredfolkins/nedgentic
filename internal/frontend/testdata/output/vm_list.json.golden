@@ -1,0 +1,18 @@
+{
+  "kind": "vm_list",
+  "items": [
+    {
+      "name": "alpha",
+      "profile": "default",
+      "image": "docker.io/library/alpine",
+      "status": "running",
+      "hostname": "alpha",
+      "ip": "10.0.0.2",
+      "workspace": "/home/alice/work",
+      "user": "alice"
+    }
+  ],
+  "summary": {
+    "runtime_data_root": "/Users/alice/Library/Application Support/com.apple.container"
+  }
+}

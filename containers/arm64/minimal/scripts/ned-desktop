@@ -1,0 +1,220 @@
+#!/bin/bash
+# ned-desktop: a tiny X desktop (Xvfb, JWM, Chromium, xterm) served through
+# noVNC on port 6080. Run it as the VM user, not root.
+#
+#   ned-desktop start     start (idempotent); prints one line for ned:
+#                         NED_DESKTOP port=6080 password=<vnc password>
+#   ned-desktop stop      stop the desktop
+#   ned-desktop status    report whether it is running
+#   ned-desktop terminal  open another terminal
+#   ned-desktop browser   open Chromium (or a new window if it is running)
+#
+# Agents in the VM draw on DISPLAY=:1; Chromium also serves the DevTools
+# protocol on 127.0.0.1:9222 for Playwright/CDP clients.
+set -u
+
+DISPLAY_NUM=1
+export DISPLAY=":$DISPLAY_NUM"
+GEOMETRY=${NED_DESKTOP_GEOMETRY:-1600x1000x24}
+NOVNC_PORT=6080
+VNC_PORT=5901
+CDP_PORT=9222
+NOVNC_WEB=/usr/share/novnc
+JWM_CONFIG=/etc/ned-desktop/jwmrc
+X_SOCKET="/tmp/.X11-unix/X$DISPLAY_NUM"
+STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/ned-desktop-$(id -u)"
+PASSWORD_FILE="$STATE_DIR/vncpasswd"
+CHROMIUM_PROFILE="${HOME:-/tmp}/.local/share/ned-desktop/chromium"
+WAIT_SECONDS=30
+# Core services in start order; stop runs them in reverse.
+CORE="xvfb wm vnc novnc"
+
+die() {
+  echo "ned-desktop: $*" >&2
+  exit 1
+}
+
+usage() {
+  sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+ensure_state_dir() {
+  mkdir -p -m 0700 "$STATE_DIR" || die "cannot create $STATE_DIR"
+  [ -O "$STATE_DIR" ] || die "$STATE_DIR is not owned by $(id -un)"
+  chmod 0700 "$STATE_DIR"
+}
+
+pid_of() {
+  cat "$STATE_DIR/$1.pid" 2>/dev/null
+}
+
+# alive NAME: the recorded process exists and is not a zombie (PID 1 in the
+# VM may not reap orphans).
+alive() {
+  pid=$(pid_of "$1")
+  [ -n "$pid" ] || return 1
+  state=$(ps -o stat= -p "$pid" 2>/dev/null)
+  [ -n "$state" ] && [ "${state#Z}" = "$state" ]
+}
+
+# launch NAME CMD...: run CMD detached in its own session, logging to
+# $STATE_DIR/NAME.log and recording its pid.
+launch() {
+  name=$1
+  shift
+  nohup setsid "$@" >"$STATE_DIR/$name.log" 2>&1 </dev/null &
+  echo $! >"$STATE_DIR/$name.pid"
+}
+
+port_open() {
+  (exec 3<>"/dev/tcp/$1/$2") 2>/dev/null
+}
+
+# wait_for LABEL CMD...: poll CMD until it succeeds or WAIT_SECONDS pass.
+wait_for() {
+  label=$1
+  shift
+  tries=$((WAIT_SECONDS * 5))
+  while [ "$tries" -gt 0 ]; do
+    "$@" && return 0
+    sleep 0.2
+    tries=$((tries - 1))
+  done
+  die "$label did not come up (logs: $STATE_DIR)"
+}
+
+core_running() {
+  for name in $CORE; do
+    alive "$name" || return 1
+  done
+  [ -s "$PASSWORD_FILE" ]
+}
+
+# stop_one NAME: signal the process group NAME leads and wait for it to exit.
+stop_one() {
+  if alive "$1"; then
+    kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null
+    tries=25
+    while alive "$1" && [ "$tries" -gt 0 ]; do
+      sleep 0.2
+      tries=$((tries - 1))
+    done
+    if alive "$1"; then kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null; fi
+  fi
+  rm -f "$STATE_DIR/$1.pid"
+}
+
+stop_all() {
+  for name in browser terminal novnc vnc wm xvfb; do
+    stop_one "$name"
+  done
+  rm -f "$PASSWORD_FILE"
+}
+
+user_shell() {
+  if [ -n "${SHELL:-}" ] && [ -x "$SHELL" ]; then
+    echo "$SHELL"
+    return
+  fi
+  shell=$(getent passwd "$(id -un)" | cut -d: -f7)
+  if [ -n "$shell" ] && [ -x "$shell" ]; then echo "$shell"; else echo /bin/bash; fi
+}
+
+open_terminal() {
+  shell=$(user_shell)
+  export SHELL="$shell"
+  # A login shell reads the same profile files as `ned gentic`, so the agent
+  # CLIs and PATH match the attached shell.
+  exec xterm -title Terminal -fa Monospace -fs 11 -bg '#1c1c1c' -fg '#e0e0e0' \
+    -geometry 120x36 -e "$shell" -l
+}
+
+exec_browser() {
+  mkdir -p "$CHROMIUM_PROFILE"
+  # Chromium keeps its sandbox on: the VM kernel lets this unprivileged user
+  # create the user namespaces the sandbox needs.
+  exec chromium \
+    "--user-data-dir=$CHROMIUM_PROFILE" \
+    --remote-debugging-address=127.0.0.1 \
+    "--remote-debugging-port=$CDP_PORT" \
+    --no-first-run \
+    --no-default-browser-check \
+    --password-store=basic \
+    --disable-dev-shm-usage \
+    --start-maximized
+}
+
+ensure_apps() {
+  alive browser || launch browser "$0" _browser
+  alive terminal || launch terminal "$0" terminal
+}
+
+print_line() {
+  echo "NED_DESKTOP port=$NOVNC_PORT password=$(cat "$PASSWORD_FILE")"
+}
+
+start() {
+  [ "$(id -u)" -ne 0 ] || die "run as the VM user, not root"
+  ensure_state_dir
+  if core_running; then
+    ensure_apps
+    print_line
+    return 0
+  fi
+  stop_all
+
+  # VNC authentication only uses the first 8 characters of a password.
+  password=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 8)
+  [ "${#password}" -eq 8 ] || die "cannot generate a password"
+  (umask 077 && printf '%s\n' "$password" >"$PASSWORD_FILE")
+
+  [ -d /tmp/.X11-unix ] || mkdir -m 1777 /tmp/.X11-unix 2>/dev/null || true
+  rm -f "$X_SOCKET" "/tmp/.X$DISPLAY_NUM-lock" 2>/dev/null || true
+  launch xvfb Xvfb "$DISPLAY" -screen 0 "$GEOMETRY" -nolisten tcp
+  wait_for "Xvfb" test -S "$X_SOCKET"
+  launch wm jwm -f "$JWM_CONFIG"
+  # x11vnc listens on loopback only; noVNC is the one public endpoint.
+  launch vnc x11vnc -display "$DISPLAY" -localhost -rfbport "$VNC_PORT" \
+    -passwdfile "$PASSWORD_FILE" -forever -shared -noxdamage -quiet
+  wait_for "x11vnc" port_open 127.0.0.1 "$VNC_PORT"
+  launch novnc websockify --web "$NOVNC_WEB" "0.0.0.0:$NOVNC_PORT" "127.0.0.1:$VNC_PORT"
+  wait_for "noVNC" port_open 127.0.0.1 "$NOVNC_PORT"
+  ensure_apps
+  print_line
+}
+
+status() {
+  ensure_state_dir
+  if core_running; then
+    echo "running: noVNC port $NOVNC_PORT, DISPLAY=$DISPLAY, CDP 127.0.0.1:$CDP_PORT"
+    return 0
+  fi
+  echo "stopped"
+  return 1
+}
+
+case "${1:-}" in
+  start) start ;;
+  stop)
+    ensure_state_dir
+    stop_all
+    echo "stopped"
+    ;;
+  status) status ;;
+  terminal) open_terminal ;;
+  browser)
+    ensure_state_dir
+    if alive browser; then
+      # Chromium hands the request to the running instance (new window).
+      nohup setsid "$0" _browser >/dev/null 2>&1 </dev/null &
+    else
+      launch browser "$0" _browser
+    fi
+    ;;
+  _browser) exec_browser ;;
+  -h | --help | help) usage ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac

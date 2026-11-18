@@ -1,0 +1,94 @@
+#!/bin/sh
+if [ -n "${NED_GENTIC_DEBUG:-}" ]; then set -eux; else set -e; fi
+USER_NAME={{.UserName}}
+USER_UID={{.UserUID}}
+USER_GID={{.UserGID}}
+HOME_DIR={{.HomeDir}}
+SHELL_PATH={{.ShellPath}}
+NED_PREFIX="$(printf '\033[38;5;180m[\033[38;5;15m\342\214\220\033[38;5;251m\342\227\257\033[38;5;15m-\033[38;5;251m\342\227\257\033[38;5;180m]\033[0m')"
+if [ ! -x "$SHELL_PATH" ]; then SHELL_PATH=/bin/sh; fi
+export USER_NAME USER_UID USER_GID HOME_DIR SHELL_PATH
+if [ -n "${NED_HOSTNAME:-}" ]; then
+  if command -v hostname >/dev/null 2>&1; then hostname "$NED_HOSTNAME" >/dev/null 2>&1 || true; fi
+  if [ -w /etc/hostname ]; then echo "$NED_HOSTNAME" >/etc/hostname 2>/dev/null || true; fi
+fi
+GENTIC_DIR="/ned/hooks"
+if [ -n "${NED_GENTIC_DIR:-}" ]; then
+  GENTIC_DIR="$NED_GENTIC_DIR"
+elif [ ! -d "$GENTIC_DIR" ]; then
+  GENTIC_DIR={{.GenticDir}}
+fi
+if [ -d "$GENTIC_DIR" ]; then
+  GENTIC_STEP=0
+  now_ms() {
+    TS=$(date +%s%3N 2>/dev/null || true)
+    case "$TS" in
+      *N*) TS="" ;;
+    esac
+    if [ -z "$TS" ]; then
+      SEC=$(date +%s 2>/dev/null || printf 0)
+      TS=$((SEC*1000))
+    fi
+    printf "%s" "$TS"
+  }
+  format_ms() {
+    if command -v awk >/dev/null 2>&1; then
+      awk -v ms="$1" 'BEGIN { printf "%.3fs", ms/1000 }'
+    else
+      SEC=$(( $1 / 1000 ))
+      printf "%ss" "$SEC"
+    fi
+  }
+  GENTIC_TOTAL=0
+  for script in "$GENTIC_DIR"/*.sh; do
+    if [ -f "$script" ]; then
+      GENTIC_TOTAL=$((GENTIC_TOTAL+1))
+    fi
+  done
+  for script in "$GENTIC_DIR"/*.sh; do
+    if [ -f "$script" ]; then
+      GENTIC_STEP=$((GENTIC_STEP+1))
+      STEP_START=$(now_ms)
+      if [ -n "${NED_GENTIC_DEBUG:-}" ]; then
+        /bin/sh -x "$script"
+      else
+        /bin/sh "$script"
+      fi
+      STEP_END=$(now_ms)
+      STEP_ELAPSED_MS=$((STEP_END-STEP_START))
+      STEP_ELAPSED_FMT=$(format_ms "$STEP_ELAPSED_MS")
+      echo "${NED_PREFIX} Run Gentic script [${GENTIC_STEP}/${GENTIC_TOTAL}]: $script [${STEP_ELAPSED_FMT}]"
+    fi
+  done
+fi
+if ! id -u "$USER_NAME" >/dev/null 2>&1; then USER_NAME=root; HOME_DIR=/root; USER_UID=0; USER_GID=0; fi
+mkdir -p "$HOME_DIR"
+chown "$USER_UID":"$USER_GID" "$HOME_DIR" || true
+if [ "$USER_NAME" != "root" ] && [ ! -e "/home/$USER_NAME" ]; then ln -s "$HOME_DIR" "/home/$USER_NAME" >/dev/null 2>&1 || true; fi
+WORKSPACE_PATH={{.WorkspacePath}}
+WORKSPACE_MOUNT={{.WorkspaceMount}}
+if [ -n "$WORKSPACE_PATH" ] && [ -n "$WORKSPACE_MOUNT" ]; then
+  WS_PARENT=$(dirname "$WORKSPACE_PATH")
+  if [ -n "$WS_PARENT" ] && [ "$WS_PARENT" != "/" ]; then
+    mkdir -p "$WS_PARENT"
+    case "$WORKSPACE_PATH" in
+      "$HOME_DIR"/*) chown "$USER_UID":"$USER_GID" "$WS_PARENT" 2>/dev/null || true ;;
+    esac
+  fi
+  if [ -e "$WORKSPACE_PATH" ] && [ ! -L "$WORKSPACE_PATH" ]; then
+    case "$WORKSPACE_PATH" in
+      "$HOME_DIR"/*) rm -rf "$WORKSPACE_PATH" ;;
+    esac
+  fi
+  if [ ! -L "$WORKSPACE_PATH" ]; then
+    ln -s "$WORKSPACE_MOUNT" "$WORKSPACE_PATH" >/dev/null 2>&1 || true
+  fi
+  chown -h "$USER_UID":"$USER_GID" "$WORKSPACE_PATH" || true
+fi
+{{.CopyBlock}}
+{{.AgentAuthBlock}}touch /tmp/ned-ready
+export HOME="$HOME_DIR"
+export USER="$USER_NAME"
+export LOGNAME="$USER_NAME"
+export SHELL="$SHELL_PATH"
+if command -v su >/dev/null 2>&1; then exec su - "$USER_NAME" -c {{.ShellCommand}}; else exec /bin/sh -c {{.ShellCommand}}; fi

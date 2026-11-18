@@ -1,0 +1,39 @@
+NED_AUTH_DIR={{.AuthDir}}
+if [ -d "$NED_AUTH_DIR" ]; then
+  # Agent CLI logins live on this VM's own auth volume so they survive VM
+  # recreation and never touch the host. A real directory already at a
+  # target (from a profile import) is left alone.
+  chown "$USER_UID":"$USER_GID" "$NED_AUTH_DIR" || true
+  chmod 0700 "$NED_AUTH_DIR" || true
+  for NED_AUTH_ENTRY in .claude .codex .gemini .grok .local/share/opencode; do
+    NED_AUTH_TARGET="$HOME_DIR/$NED_AUTH_ENTRY"
+    if [ -e "$NED_AUTH_TARGET" ] && [ ! -L "$NED_AUTH_TARGET" ]; then continue; fi
+    NED_AUTH_STORE="$NED_AUTH_DIR/$(printf '%s' "$NED_AUTH_ENTRY" | tr '/' '_')"
+    mkdir -p "$NED_AUTH_STORE"
+    chown "$USER_UID":"$USER_GID" "$NED_AUTH_STORE" || true
+    chmod 0700 "$NED_AUTH_STORE" || true
+    # Create missing parents (e.g. ~/.local/share) owned by the user, from
+    # the topmost one down.
+    NED_AUTH_PARENT="$(dirname "$NED_AUTH_TARGET")"
+    NED_AUTH_TOP=""
+    while [ "$NED_AUTH_PARENT" != "$HOME_DIR" ] && [ ! -e "$NED_AUTH_PARENT" ]; do
+      NED_AUTH_TOP="$NED_AUTH_PARENT"
+      NED_AUTH_PARENT="$(dirname "$NED_AUTH_PARENT")"
+    done
+    mkdir -p "$(dirname "$NED_AUTH_TARGET")"
+    if [ -n "$NED_AUTH_TOP" ]; then chown -R "$USER_UID":"$USER_GID" "$NED_AUTH_TOP" || true; fi
+    ln -sfn "$NED_AUTH_STORE" "$NED_AUTH_TARGET"
+    chown -h "$USER_UID":"$USER_GID" "$NED_AUTH_TARGET" || true
+  done
+  # CLAUDE_CONFIG_DIR points Claude at ~/.claude; carry any existing
+  # ~/.claude.json into it.
+  if [ -f "$HOME_DIR/.claude.json" ] && [ ! -e "$HOME_DIR/.claude/.claude.json" ]; then
+    cp "$HOME_DIR/.claude.json" "$HOME_DIR/.claude/.claude.json" || true
+    chmod 0600 "$HOME_DIR/.claude/.claude.json" || true
+    chown "$USER_UID":"$USER_GID" "$HOME_DIR/.claude/.claude.json" || true
+  fi
+  mkdir -p /usr/local/bin
+  cat > /usr/local/bin/ned-agent-login <<'NED_AGENT_LOGIN_EOF'
+{{.LoginScript}}NED_AGENT_LOGIN_EOF
+  chmod 0755 /usr/local/bin/ned-agent-login || true
+fi
