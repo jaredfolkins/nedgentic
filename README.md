@@ -1,5 +1,9 @@
 # Nedgentic
 
+<p align="center">
+  <img src="assets/nedgentic.png" alt="Nedgentic logo: round glasses and a mustache" width="640">
+</p>
+
 `ned` drops you into a sandboxed Linux VM on your Mac with Claude, Codex,
 Gemini, Grok, and opencode one keypress away. The folder you start it from is
 mounted read-write; nothing else on your Mac is touched.
