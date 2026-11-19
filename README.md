@@ -26,21 +26,23 @@ macOS. Model requests still go to the provider you use.
 You need an Apple silicon Mac running macOS 26 or later. Homebrew is recommended
 for setting up Apple's `container` runtime.
 
-Download `ned-darwin-arm64` from the
-[latest release](https://github.com/jaredfolkins/nedgentic/releases/latest).
-If you saved it in Downloads:
+Install `ned` from the [latest release](https://github.com/jaredfolkins/nedgentic/releases/latest):
 
 ```sh
-mkdir -p ~/go/bin
-install -m 0755 ~/Downloads/ned-darwin-arm64 ~/go/bin/ned
+curl -fsSL https://raw.githubusercontent.com/jaredfolkins/nedgentic/main/install.sh | sh
+```
+
+The installer checks the binary's checksum and puts `ned` in a writable
+directory on your `PATH`. Then open a project:
+
+```sh
 cd ~/src/my-project
-~/go/bin/ned gentic default vm-default
+ned gentic default vm-default
 ```
 
 `default` is the profile. `vm-default` is the VM name.
 The first run sets up the runtime if needed, verifies and loads the release's
-VM image, and opens a shell in your project. Add `~/go/bin` to your `PATH` to use
-`ned` directly.
+VM image, and opens a shell in your project.
 
 ## Sign in to an agent
 
