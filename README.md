@@ -1,196 +1,125 @@
 # Nedgentic
 
 <p align="center">
-  <img src="assets/nedgentic.png" alt="Nedgentic logo: round glasses and a mustache" width="640">
+  <img src="assets/nedgentic.png" alt="Nedgentic logo: round glasses and a mustache" width="480">
 </p>
 
-Everyone is moving their agent sandboxes to the cloud, except when they
-don't. I found that there were edge cases where I had to work with an agent
-locally and wanted a secure place to operate from my laptop.
+I use cloud sandboxes when they fit. Ned is for the times I need an agent on a
+checkout that's already on my Mac, without installing all its tools on the host
+or sharing my host logins.
 
-`ned` drops you into a sandboxed Linux VM on your Mac with Claude, Codex,
-Gemini, Grok, and opencode one keypress away. The folder you start it from is
-mounted read-write; nothing else on your Mac is touched.
+`ned` starts a Linux VM on Apple silicon and shares the folder you launch from.
+The agent can edit that folder, and you can keep working on the same files from
+macOS. Model requests still go to the provider you use.
 
-## Requirements
+## What it solves
 
-- A Mac with Apple silicon running macOS 26 or later.
-- Go 1.27.4 or newer to build `ned`.
-- Homebrew (recommended). Ned installs or upgrades Apple's `container` runtime
-  on first run.
+| If you need to… | Ned lets you… |
+| --- | --- |
+| Work on a local checkout | Give the VM read-write access to that project folder, without sharing the rest of your home directory by default. |
+| Try an agent without setting up another stack on your Mac | Install Claude, Codex, Gemini, Grok, or opencode in the VM when you choose it. Ned updates installed CLIs on boot. |
+| Keep provider accounts separate | Sign in once per VM. Logins stay with that VM across restarts, so a different account can live in a different VM. |
+| See what an agent is testing | Open the VM's Chromium and terminal from your Mac's browser with `ned desktop`. |
 
-## Get Started
+## Get started
 
-```bash
-make build-ned                 # builds bin/ned and copies it to ~/go/bin/ned
+You need an Apple silicon Mac running macOS 26 or later. Homebrew is recommended
+for setting up Apple's `container` runtime.
+
+Download `ned-darwin-arm64` from the
+[latest release](https://github.com/jaredfolkins/nedgentic/releases/latest).
+If you saved it in Downloads:
+
+```sh
+mkdir -p ~/go/bin
+install -m 0755 ~/Downloads/ned-darwin-arm64 ~/go/bin/ned
 cd ~/src/my-project
-ned gentic default
+~/go/bin/ned gentic default
 ```
 
-On first run Ned checks your Mac, installs the `container` runtime, writes the
-`default` profile to `~/.ned/profiles/personal/default/config.hujson`,
-downloads the minimal image from this release's GitHub assets (checked
-against the sha256 built into `ned`), boots the VM, and mounts your folder at
-the same path under the guest home. A dev build of `ned` does not download;
-build the image with `make -C containers/arm64/minimal` (`ned-minimal:dev`).
+The first run sets up the runtime if needed, verifies and loads the release's
+VM image, and opens a shell in your project. Add `~/go/bin` to your `PATH` to use
+`ned` directly.
 
-The image ships no agent CLIs. Each one installs (latest release, official
-installer) when you choose its sign-in. On every boot Ned reinstalls the CLI
-of each signed-in provider and updates installed ones in the background (log:
-`/var/log/ned-agent-update.log`); nothing is installed for providers you
-skipped.
+## Sign in to an agent
 
-Type `exit` to detach. The VM keeps running; run the same command to reattach.
+In the VM, press **Enter** to install or sign in to the selected CLI, **Down**
+to skip it, or **q** to go straight to the shell. Run `ned-agent-login` in the
+VM to choose again later.
 
-## Sign In
+![Ned's terminal prompt with Codex selected and no sign-in code displayed](assets/screenshots/agent-sign-in.png)
 
-Ned never copies logins from your Mac. Provider tokens rotate when a CLI
-refreshes them, so a copy would break the login on your Mac. Each VM signs in
-for itself.
+*Choose an agent in the VM. You don't have to install the ones you skip.*
 
-The first time you attach, the VM lists all five CLIs. Enter installs that CLI
-(the first sign-in downloads it) and signs in, Down skips (remembered for this
-VM; it is never installed), `q` quits. Each sign-in prints a link: open it in
-your Mac's browser, approve, and paste the code back if asked. Gemini also
-installs Node.js (latest LTS).
+Open the link printed in the terminal in your Mac's browser. Sign in there and
+follow the provider's prompts. For Codex,
+[enable device code login](https://learn.chatgpt.com/docs/auth#preferred-device-code-authentication-beta)
+and enter the one-time code from the terminal when prompted.
 
-| CLI      | Sign-in it runs                               |
-|----------|-----------------------------------------------|
-| Claude   | `claude auth login`                           |
-| Codex    | `codex login --device-auth`                   |
-| Grok     | `grok login --device-auth`                    |
-| Gemini   | `gemini` with `NO_BROWSER=true`, then `/auth` |
-| opencode | `opencode auth login`                         |
+<p>
+  <img src="assets/screenshots/host-sign-in.png" alt="OpenAI sign-in page in the Mac browser, with the email field empty" width="620">
+</p>
 
-Codex device sign-in must be enabled in your ChatGPT security settings. Run
-`ned-agent-login` in the VM to revisit every CLI (sign in again, switch
-accounts, or install one you skipped), or `ned-agent-install <cli>` to install
-one without signing in.
+*The Codex device link opens OpenAI's sign-in page on the Mac. Ned does not copy
+your Mac's existing agent credentials into the VM.*
 
-Logins live on the VM's own disk (a `ned-auth-<vm>` volume). They survive
-detach, `ned stop`, restarts, and VM recreation, and are deleted by
-`ned remove`.
+## Open the VM's browser
 
-## Rotate Accounts
-
-Every VM has its own logins, so each can use a different provider account.
-When one hits a rate limit, switch to another VM on the same folder:
-
-```bash
-ned gentic default work-a   # terminal 1: account A
-ned gentic default work-b   # terminal 2: account B
+```sh
+ned desktop default
 ```
 
-Both VMs see the same project files. If your browser is signed in to account A,
-sign out or use another browser profile before approving account B. With
-`--herdr`, each VM gets its own [HerdR](https://herdr.dev/) workspace.
+This opens the VM's desktop in your Mac's browser. Chromium runs **inside the
+VM**, so you can use it to test a site running there without using your host
+browser profile. If macOS asks for Local Network access, allow it so that your
+browser can reach the VM.
 
-## Desktop and Browser
+![Guest Chromium showing the Nedgentic GitHub repository through the noVNC viewer](assets/screenshots/vm-browser.png)
 
-The minimal image carries a tiny desktop: Chromium and a terminal (xterm) under
-the JWM window manager, drawn on Xvfb and served by noVNC.
+*Chromium inside Ned's VM, viewed from the Mac through noVNC.*
 
-```bash
-ned desktop [vm]          # start it and open it in your Mac's browser
-ned desktop stop [vm]     # stop it
+## Day-to-day commands
+
+```sh
+ned list                     # see your VMs
+ned gentic default           # reopen the same shell, or boot the VM
+ned gentic default work-b    # same project, separate VM and sign-in
+ned desktop stop default     # close the desktop, leave the VM running
+ned stop default             # stop the VM, keep its logins
 ```
 
-Without a VM name, `ned desktop` uses the `default` profile's VM. If macOS
-asks, allow your browser Local Network access: the page is served from the
-VM's address. The terminal opens in your workspace with your login shell, so
-the agent CLIs you installed work there. Open more from the desktop menu (click the desktop
-or the tray's Menu button), the tray buttons, or Ctrl+Alt+T (terminal) and
-Ctrl+Alt+B (Chromium).
+Type `exit` in the VM shell to detach without stopping it. `ned remove <vm>`
+deletes that VM **and its saved logins**. See `ned help` for the rest.
 
-Agents in the VM drive the same screen with `DISPLAY=:1`; Chromium also serves
-the DevTools protocol on `127.0.0.1:9222` inside the VM for Playwright/CDP.
-Chromium runs with its sandbox on. In the VM, `ned-desktop start|stop|status`
-manages it directly.
+<details>
+<summary>Profiles and agent tools</summary>
 
-Only noVNC listens on the VM's address (port 6080, reached directly at the VM
-IP); x11vnc and DevTools stay on the VM's loopback. Each fresh start makes a new
-random VNC password (VNC uses 8 characters), stored 0600 in the VM and passed
-only in the URL Ned opens. Other VMs on the same container network can reach
-port 6080 but need that password.
+Ned creates `~/.ned/profiles/personal/<name>/config.hujson` the first time you
+use a profile. Set `resources` to change CPU, memory, or disk; `image` to use a
+different guest image; and `imports` to add files or folders. Files are copied
+into the VM. Directory mounts must be under your home directory and can be
+read-only. Ned rejects imports of host agent login paths.
 
-## Commands
+Inside the VM, `ned-agent-install <cli>` installs a CLI without signing in. The
+desktop uses `DISPLAY=:1`; guest Chromium's DevTools endpoint is
+`127.0.0.1:9222` **inside the VM**. Use `ned gentic <profile> --herdr` to attach
+in [HerdR](https://herdr.dev/).
 
-```bash
-ned gentic <profile> [vm] # start (or reattach to) a VM; --herdr runs it in HerdR
-ned list                  # VMs and their status
-ned exec <vm> -- <cmd>    # run a command in a running VM
-ned desktop [vm]          # open the VM's desktop in your browser
-ned desktop stop [vm]     # stop the desktop
-ned start <vm>...         # start stopped VMs without attaching
-ned stop <vm>             # stop a VM (logins kept)
-ned remove <vm>...        # delete VMs and their logins
-ned help [command]        # usage for a command
+</details>
+
+<details>
+<summary>Build from source</summary>
+
+With Go 1.27.4 or later, run:
+
+```sh
+make build-ned                         # builds and installs ~/go/bin/ned
+make -C containers/arm64/minimal       # builds ned-minimal:dev for the dev CLI
+go test ./internal/...
 ```
 
-## Profiles
+A dev build uses the local image; it does not download a release image.
+`make release VERSION=YYYYMMDDvN` (with the actual date and release number)
+prepares release assets without publishing them.
 
-A profile is a HuJSON file (JSON with comments) at
-`~/.ned/profiles/personal/<name>/config.hujson`. `ned gentic <name>`
-creates it on first use. Example:
-
-```json
-{
-  "shell": "/bin/bash",
-  "image": "ned-minimal:dev",
-  "resources": {
-    "cpus": "2",
-    "memory": "4G"
-  },
-  "imports": {
-    "files": [
-      { "host": "/Users/me/.env", "vm": ".env", "mode": "copy" }
-    ],
-    "directories": [
-      { "host": "/Users/me/src", "vm": "src", "mode": "mount", "access": "readwrite" }
-    ]
-  }
-}
-```
-
-- `imports.files` are copied into the VM through a private, read-only staging
-  directory. `imports.directories` are bind-mounted (or copied with
-  `"mode": "copy"`) and must be under your home directory.
-- Host agent login paths (`~/.claude`, `~/.codex`, `~/.gemini`, `~/.grok`,
-  `~/.local/share/opencode`) are rejected.
-- `resources` sets `cpus`, `memory`, and `disk`; `flags` holds advanced
-  runtime settings (network, DNS, proxies, Linux capabilities, ulimits,
-  `rm-container-on-exit`). Ned has no global command-line flags. Unknown keys
-  fail the load.
-
-`ned-minimal:<tag>` images are local only: Ned downloads its own release's tag
-and never pulls other tags from a registry. Other images are pulled normally.
-Private images must be pulled with `container image pull` first; Ned uses the
-local image.
-
-## Security
-
-The VM is the boundary. Only the workspace is mounted read-write; imported
-files are copied in read-only. A compromised guest can change your project
-files and use that VM's own provider logins, but cannot read other host files,
-your Mac's logins, or another VM's logins.
-
-## Development
-
-```bash
-go test ./...                       # unit + e2e (e2e needs the container runtime)
-go vet ./...
-go build -o bin/ned ./cmd/ned
-make -C containers/arm64/minimal    # build the minimal image (ned-minimal:dev)
-```
-
-## Release
-
-```bash
-make release VERSION=20261118v1   # YYYYMMDDvN: date, then the day's release number
-```
-
-Builds `ned-minimal:20261118v1`, saves it to `dist/ned-minimal-arm64.oci.tar.gz`,
-and builds `dist/ned-darwin-arm64` with the version, asset URL, image name,
-and archive sha256 embedded, plus `dist/SHA256SUMS`. It publishes nothing; it
-prints the `gh release create` command to run. The image holds only Debian
-packages and this repo's MIT scripts; agent CLIs are downloaded in the VM.
+</details>
