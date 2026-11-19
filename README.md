@@ -34,9 +34,10 @@ If you saved it in Downloads:
 mkdir -p ~/go/bin
 install -m 0755 ~/Downloads/ned-darwin-arm64 ~/go/bin/ned
 cd ~/src/my-project
-~/go/bin/ned gentic default
+~/go/bin/ned gentic default vm-default
 ```
 
+`default` is the profile. `vm-default` is the VM name.
 The first run sets up the runtime if needed, verifies and loads the release's
 VM image, and opens a shell in your project. Add `~/go/bin` to your `PATH` to use
 `ned` directly.
@@ -66,7 +67,7 @@ your Mac's existing agent credentials into the VM.*
 ## Open the VM's browser
 
 ```sh
-ned desktop default
+ned desktop vm-default
 ```
 
 This opens the VM's desktop in your Mac's browser. Chromium runs **inside the
@@ -81,14 +82,14 @@ browser can reach the VM.
 ## Day-to-day commands
 
 ```sh
-ned list                     # see your VMs
-ned gentic default           # reopen the same shell, or boot the VM
-ned gentic default work-b    # same project, separate VM and sign-in
-ned desktop stop default     # close the desktop, leave the VM running
-ned stop default             # stop the VM, keep its logins
+ned list                          # see your VMs
+ned gentic default vm-default     # reattach to the VM, or boot it
+ned gentic default vm-work-b      # same project, separate VM and sign-in
+ned desktop stop vm-default       # close the desktop, leave the VM running
+ned stop vm-default               # stop the VM, keep its logins
 ```
 
-Type `exit` in the VM shell to detach without stopping it. `ned remove <vm>`
+Type `exit` in the VM shell to detach without stopping it. `ned remove vm-default`
 deletes that VM **and its saved logins**. See `ned help` for the rest.
 
 <details>
@@ -102,8 +103,8 @@ read-only. Ned rejects imports of host agent login paths.
 
 Inside the VM, `ned-agent-install <cli>` installs a CLI without signing in. The
 desktop uses `DISPLAY=:1`; guest Chromium's DevTools endpoint is
-`127.0.0.1:9222` **inside the VM**. Use `ned gentic <profile> --herdr` to attach
-in [HerdR](https://herdr.dev/).
+`127.0.0.1:9222` **inside the VM**. Use `ned gentic default vm-default --herdr`
+to attach in [HerdR](https://herdr.dev/).
 
 </details>
 
